@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+
+# Environments
+.venv/
+venv/
+env/
+
+# Data: never committed. The official KLA dataset is not redistributable and
+# synthetic outputs are reproducible from configs + seeds.
+data/
+!data/README.md
+
+# Run artifacts. Checkpoints are large; the final deliverable checkpoint is
+# added explicitly with `git add -f`.
+runs/
+!runs/README.md
+*.pth
+*.pt
+*.ckpt
+
+# Results: the experiment ledger IS tracked (it is the evidence trail).
+results/**
+!results/README.md
+!results/experiments.csv
+!results/*.json
+!results/figures/
+!results/figures/**
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Local scratch
+/tmp/
+*.log
+!docs/*.log
+runs/_smoke_restored/
+runs/_smoke_restored_report.json
+runs/_gate*
