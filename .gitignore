@@ -32,6 +32,9 @@ results/**
 !results/*.json
 !results/figures/
 !results/figures/**
+# Committed run summaries (small text artifacts, no checkpoints).
+!results/colab_t4_40ep/
+!results/colab_t4_40ep/**
 
 # OS / editor
 .DS_Store
