@@ -47,3 +47,5 @@ Thumbs.db
 runs/_smoke_restored/
 runs/_smoke_restored_report.json
 runs/_gate*
+# Throwaway probes kept at the repo root while diagnosing platform behaviour.
+/_*.py
