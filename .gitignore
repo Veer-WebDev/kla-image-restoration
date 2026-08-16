@@ -45,6 +45,8 @@ Thumbs.db
 
 # Local scratch
 /tmp/
+.smoke-venv/
+.smoke-work/
 *.log
 !docs/*.log
 runs/_smoke_restored/

@@ -1,0 +1,17 @@
+# Runtime dependencies for standalone training and inference.
+# Install a CUDA-compatible PyTorch build separately when running on an NVIDIA GPU.
+torch>=2.1,<2.7
+torchvision>=0.16,<0.22
+numpy>=1.24,<2
+Pillow>=10,<12
+PyYAML>=6,<7
+tqdm>=4.65,<5
+
+# Evaluation-only. inference.py does not import these packages.
+scikit-image>=0.22,<0.25
+lpips>=0.1.4,<0.2
+pandas>=2,<3
+matplotlib>=3.8,<4
+
+# Development and reproducibility verification.
+pytest>=8,<9
