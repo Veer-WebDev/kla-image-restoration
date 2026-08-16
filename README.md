@@ -20,7 +20,7 @@ The model uses convolution, GroupNorm, GELU and skip connections. It predicts a 
 - `configs/baseline.yaml`: controlled starting recipe. Unspecified degradation priors live in `configs/degradation.yaml`.
 - `src/kla_restore/`: model, data, degradation, metrics, checkpoints and training logic.
 - `tests/`: pairing, splitting, normalization, deterministic degradation, metrics, shape and seed regressions.
-- `docs/`: audit, external-data gate, experiment record, augmentation rationale and limitations.
+- `docs/`: audit, external-data gate, experiment record, augmentation rationale, limitations and requirement-to-evidence traceability.
 
 ## Installation
 

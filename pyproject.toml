@@ -25,7 +25,6 @@ dev = ["pytest>=8"]
 
 [project.scripts]
 kla-train = "kla_restore.cli:train_main"
-kla-evaluate = "kla_restore.cli:evaluate_main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
