@@ -1,0 +1,76 @@
+# Baseline training configuration.
+#
+# This is the frozen reference recipe carried over from the audited starter
+# notebook (docs/IMPLEMENTATION_AUDIT.md section 6). Ablations override single
+# keys via --set on train.py; they never edit this file.
+
+experiment_id: edsr
+seed: 42
+device: auto            # auto | cuda | cuda:0 | cpu
+strict_determinism: false
+
+data:
+  gt_dir: data/GT
+  noisy_dir: null       # official NoisyLR directory; null = synthetic-only training
+  split_ratios: [0.8, 0.1, 0.1]
+  split_seed: 42
+  channels: 1           # 1 or 3; auto-detected at startup and overridden if it disagrees
+  autodetect_channels: true
+  patch_size: 256
+  samples_per_image: 8  # epoch length multiplier; fixes audit finding 3.10
+  synthetic_prob: 0.6   # probability of a synthetic sample in mixed mode
+  augment: true
+  augment_flips: true
+  augment_rot90: true
+  cache_images: true
+  max_eval_size: 1024   # centre-crop bound for validation images; null = unbounded
+  train_mode: mixed     # synthetic | official | mixed
+  eval_mode: auto       # auto -> official when pairs exist, else synthetic
+
+model:
+  name: edsr
+  base_channels: 64     # constant width, full-resolution trunk
+  depth: 1              # unused by edsr (no pooling); kept for schema uniformity
+  num_blocks: 16        # EDSR-style residual blocks
+  upsample_mode: bicubic
+  clamp_output: false
+  degradation_aware: false
+  condition_dim: 0
+
+loss:
+  kind: charbonnier_ssim
+  charbonnier_epsilon: 0.001
+  ssim_weight: 0.2
+  l1_weight: 0.0
+
+train:
+  epochs: 40
+  batch_size: 8
+  lr: 0.0002
+  weight_decay: 0.00001
+  optimizer: adamw
+  betas: [0.9, 0.999]
+  scheduler: cosine
+  warmup_epochs: 1
+  min_lr_factor: 0.01
+  grad_clip: 1.0
+  amp: true             # ignored on CPU
+  num_workers: 2
+  pin_memory: true
+  eval_every: 1
+  save_every: 1
+  early_stop_patience: 0   # 0 disables early stopping
+  selection_metric: psnr   # psnr | ssim | lpips | loss
+  eval_lpips: true         # LPIPS during validation only, never at inference
+
+inference:
+  scale: 2               # assumption A1: output = input_size * scale
+  batch_size: 4
+  bit_depth: 8
+  out_ext: .png
+  tile_size: 0           # 0 disables tiling; >0 processes large images in tiles
+  tile_overlap: 32
+
+paths:
+  output_dir: runs
+  results_csv: results/experiments.csv

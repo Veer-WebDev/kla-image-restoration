@@ -219,7 +219,7 @@ def load_config(path: str | Path | None, overrides: list[str] | None = None) -> 
     }
     if path:
         file_config = load_yaml(path)
-        deep_update(defaults, file_config)
+        defaults = deep_update(defaults, file_config)
     apply_overrides(defaults, overrides)
     return defaults
 
