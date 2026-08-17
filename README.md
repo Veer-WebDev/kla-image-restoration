@@ -4,6 +4,49 @@ A deterministic, submission-oriented baseline for the **KLA SEMICON India Hackat
 
 > **Status on 2026-08-17:** the repository contains a recovered and regression-tested residual U-Net baseline, a first-party source-disjoint synthetic corpus generator, and historical synthetic Colab evidence. Official paired KLA images are not present. Therefore, no repository result is represented as an official benchmark score or hidden-test performance.
 
+## Evaluator quick start (`.npy` contract)
+
+The organizer's final check runs a single command with **positional** arguments:
+
+```bash
+python run.py <input-dir> <output-dir>
+```
+
+`run.py`:
+
+- reads every `.npy` file from `<input-dir>` (recursively);
+- creates `<output-dir>` if it does not exist;
+- writes one restored `.npy` per input with the **same filename**;
+- outputs grayscale arrays of shape `(H, W)`, dtype `float32`, values in `[0, 1]` with no NaN/Inf;
+- produces the target resolution (input size x the scale stored in the checkpoint, default 2);
+- loads bundled weights from `models/best.pth` with **no internet, no API keys, no downloads, no user interaction**;
+- uses the NVIDIA GPU automatically when available, else CPU.
+
+Setup on the evaluation machine:
+
+```bash
+pip install torch --index-url https://download.pytorch.org/whl/cu121  # CUDA-matched wheel
+pip install -r requirements.txt
+python run.py /path/to/test/NoisyLR /path/to/restored
+```
+
+Submission folder layout:
+
+```text
+team_name/
+├── run.py
+├── requirements.txt
+├── README.md
+└── models/
+    └── best.pth
+```
+
+> **Weights note:** `models/best.pth` is a small residual-U-Net checkpoint whose
+> current metrics are essentially at bicubic parity (trained one epoch on
+> synthetic data). Replace it with a fully trained checkpoint via
+> `train.py`/`configs/submission_final.yaml` before final submission; `run.py`
+> and the I/O contract do not change.
+
 ## Method
 
 ```text
