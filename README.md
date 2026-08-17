@@ -162,9 +162,13 @@ optical-microscope-style 3-channel pairs:
 python generate_dataset.py --out data/rgb --n 30 --rgb
 ```
 
-The matcher operates on luminance, so it localizes RGB pairs with no code
-change: on a 10-sample RGB set it matched the grayscale quality (success@10px
-80%, confident subset 100% at 0.06 px median).
+The matcher operates on luminance, so it can process RGB pairs with no code
+change. On a fresh seeded 30-pair RGB synthetic run using the official centre
+tie-break, success@10px was 60.0% with a 0.08px median. The 16 unique-peak
+cases were 100% correct at 0.06px median, while the 14 ambiguous cases were only
+14.3% correct at 10px. This is a synthetic generalization check, not an official
+optical-tool result, and it confirms that the RGB path inherits the same
+periodic-ambiguity limitation.
 
 ## Evaluate over a dataset
 

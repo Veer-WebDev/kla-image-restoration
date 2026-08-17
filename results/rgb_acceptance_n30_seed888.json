@@ -1,0 +1,61 @@
+{
+  "manifest": "C:\\Users\\Administrator\\Projects\\kla-image-restoration\\data\\_rgb_acceptance\\manifest.csv",
+  "verify": false,
+  "center_tiebreak": true,
+  "scales": null,
+  "angles": null,
+  "ms_per_sample": 212.71630128224692,
+  "overall": {
+    "n": 30,
+    "mean_px": 148.04671741322713,
+    "median_px": 0.07842617403818553,
+    "p90_px": 425.20408271585245,
+    "max_px": 698.2020741989277,
+    "success_at_2px": 0.5666666666666667,
+    "success_at_5px": 0.5666666666666667,
+    "success_at_10px": 0.6,
+    "success_at_20px": 0.6
+  },
+  "positive_pair_confusion": [
+    {
+      "tolerance_px": 1.0,
+      "true_positive_within_tolerance": 17,
+      "false_negative_outside_tolerance": 13,
+      "true_negative": null,
+      "false_positive": null,
+      "recall_or_success_rate": 0.5666666666666667,
+      "note": "All manifest rows are positive localization pairs. TN/FP are undefined unless a separate negative-pair protocol is used."
+    },
+    {
+      "tolerance_px": 5.0,
+      "true_positive_within_tolerance": 17,
+      "false_negative_outside_tolerance": 13,
+      "true_negative": null,
+      "false_positive": null,
+      "recall_or_success_rate": 0.5666666666666667,
+      "note": "All manifest rows are positive localization pairs. TN/FP are undefined unless a separate negative-pair protocol is used."
+    }
+  ],
+  "flagged_unique": {
+    "n": 16,
+    "mean_px": 0.05728288549513516,
+    "median_px": 0.06144434315727003,
+    "p90_px": 0.07842617403818553,
+    "max_px": 0.08481754465728772,
+    "success_at_2px": 1.0,
+    "success_at_5px": 1.0,
+    "success_at_10px": 1.0,
+    "success_at_20px": 1.0
+  },
+  "flagged_ambiguous": {
+    "n": 14,
+    "mean_px": 317.1774997306351,
+    "median_px": 303.0926365816181,
+    "p90_px": 621.6873685464649,
+    "max_px": 698.2020741989277,
+    "success_at_2px": 0.07142857142857142,
+    "success_at_5px": 0.07142857142857142,
+    "success_at_10px": 0.14285714285714285,
+    "success_at_20px": 0.14285714285714285
+  }
+}
