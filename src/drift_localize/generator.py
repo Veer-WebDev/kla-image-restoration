@@ -238,10 +238,31 @@ def image_search(fine_canvas: np.ndarray, rng: np.random.Generator, *,
 # --------------------------------------------------------------------------
 # One sample
 # --------------------------------------------------------------------------
+def _to_optical_rgb(gray: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    """Bonus: turn a grayscale SEM-style capture into a plausible 3-channel
+    optical-microscope image. Optical tools image the same structure in colour
+    because different materials reflect different wavelengths; we approximate
+    this with a smooth intensity-to-colour map (dark substrate -> blue-grey,
+    mid metal -> warm gold, bright contacts/marks -> near-white) plus mild
+    per-channel gain, so the pattern is preserved but rendered in colour. The
+    localizer, which works on luminance, handles this transparently."""
+    g = gray.astype(np.float32) / 255.0
+    low = np.array([120, 90, 60], np.float32)     # BGR dark: blue-grey
+    mid = np.array([70, 150, 200], np.float32)     # BGR mid: warm gold
+    high = np.array([245, 245, 250], np.float32)   # BGR bright: near-white
+    t = g[..., None]
+    lo_mid = low + (mid - low) * np.clip(t / 0.5, 0, 1)
+    mid_hi = mid + (high - mid) * np.clip((t - 0.5) / 0.5, 0, 1)
+    rgb = np.where(t < 0.5, lo_mid, mid_hi)
+    gain = 1.0 + rng.normal(0, 0.03, size=3).astype(np.float32)
+    rgb = np.clip(rgb * gain, 0, 255)
+    return rgb.astype(np.uint8)
+
+
 def generate_sample(architecture: str, rng: np.random.Generator, *,
                     search_speckle_sigma: float = 0.0,
                     search_readout_sigma: float = 5.0,
-                    zoned: bool = True) -> dict:
+                    zoned: bool = True, rgb: bool = False) -> dict:
     """Generate one reference/search pair with ground-truth center.
 
     Returns a dict with reference_img, search_img (both uint8 1000x1000),
@@ -267,6 +288,10 @@ def generate_sample(architecture: str, rng: np.random.Generator, *,
     reference_img = image_reference(crop, rng)
     search_img = image_search(fine, rng, speckle_sigma=search_speckle_sigma,
                               readout_sigma=search_readout_sigma)
+
+    if rgb:
+        reference_img = _to_optical_rgb(reference_img, rng)
+        search_img = _to_optical_rgb(search_img, rng)
 
     box = REFERENCE_SIZE_PX // SCALE_FACTOR  # 100
     gt_x = x0 / SCALE_FACTOR + box / 2.0

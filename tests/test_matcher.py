@@ -122,3 +122,24 @@ def test_generator_produces_findable_pair(tmp_path):
 def test_generator_rejects_unknown_architecture():
     with pytest.raises(ValueError):
         generator.generate_sample("cpu", np.random.default_rng(0))
+
+
+def test_generator_rgb_bonus_is_findable(tmp_path):
+    # RGB (optical) bonus: 3-channel output; matcher (luminance) still localizes.
+    ref_p = str(tmp_path / "c_ref.png")
+    srch_p = str(tmp_path / "c_srch.png")
+    best_err = 1e9
+    saw_3channel = False
+    for seed in range(6):
+        rng = np.random.default_rng(seed)
+        s = generator.generate_sample("finfet", rng, rgb=True)
+        assert s["reference_img"].ndim == 3 and s["reference_img"].shape[2] == 3
+        assert s["search_img"].ndim == 3 and s["search_img"].shape[2] == 3
+        saw_3channel = True
+        cv2.imwrite(ref_p, s["reference_img"])
+        cv2.imwrite(srch_p, s["search_img"])
+        res = predict(ref_p, srch_p)
+        err = ((res.x - s["gt_x"]) ** 2 + (res.y - s["gt_y"]) ** 2) ** 0.5
+        best_err = min(best_err, err)
+    assert saw_3channel
+    assert best_err < 5.0, f"no findable RGB sample; best error {best_err:.1f}px"

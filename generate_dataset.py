@@ -39,6 +39,9 @@ def main() -> None:
                         "(robustness stress test; FAQ: search is noisier in test data)")
     p.add_argument("--search-readout", type=float, default=5.0,
                    help="additive readout-noise sigma on the search image")
+    p.add_argument("--rgb", action="store_true",
+                   help="bonus: render optical-microscope-style 3-channel RGB "
+                        "instead of grayscale SEM")
     args = p.parse_args()
 
     ref_dir = os.path.join(args.out, "reference")
@@ -55,7 +58,7 @@ def main() -> None:
             arch = args.arch
         s = generator.generate_sample(
             arch, rng, search_speckle_sigma=args.search_speckle,
-            search_readout_sigma=args.search_readout)
+            search_readout_sigma=args.search_readout, rgb=args.rgb)
         rid = f"{i:05d}"
         ref_path = os.path.join("reference", f"{rid}.png")
         srch_path = os.path.join("search", f"{rid}.png")
