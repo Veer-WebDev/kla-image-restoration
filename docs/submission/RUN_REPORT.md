@@ -17,7 +17,7 @@
 | Result JSON (default) | `results/localize_test_big.json` |
 | Result JSON (verify) | `results/localize_test_big_verify.json` |
 | Experiment ledger | `results/experiments.csv` |
-| Architecture PDF | `docs/submission/model_architecture.pdf` (6 pages) |
+| Architecture PDF | `docs/submission/model_architecture.pdf` (9 pages, regenerated 2026-08-17) |
 | Test data (gitignored) | `data/drift_sense_space/output/{train,val,test,test_big}/manifest.csv` |
 
 > The project also contains a gitignored `runs/` folder with **stale restoration-era junk** (`_eval*.log`, `smoke_e2e`, `_gate`, etc.). Not part of the localization solution; ignored deliberately.
@@ -34,7 +34,7 @@
 
 ---
 
-## 3. Results (synthetic — official Drift-Sense generator, `test_big`, n=200, seed 31337)
+## 3. Results (synthetic — external Drift-Sense generator, `test_big`, n=200)
 
 ### 3.1 Method-level comparison
 
@@ -137,8 +137,8 @@ graph TD
 - `src/drift_localize/__init__.py` — exports `predict`, `LocalizeResult`.
 - `infer.py` — official CLI: `--reference PATH --search PATH [--verify]` → prints `x,y`.
 - `evaluate.py` — manifest-driven harness: mean/median/p90/max, success@{2,5,10,20}px, ms/sample, unique-vs-ambiguous breakdown, optional `--json-out`.
-- `tests/test_matcher.py` — **5/5 pass** (unique center <3px, subpixel float, unique-not-flagged, periodic-flagged-ambiguous, missing-file raises).
-- `docs/submission/model_architecture.{tex,pdf}` — 6-page plain-language method doc with ambiguity-ceiling finding.
+- `tests/test_matcher.py` — **10 tests pass** (unique center, subpixel output, ambiguity, official center tie-break, rotation-aware geometric check, generator, invalid architecture, and RGB paths).
+- `docs/submission/model_architecture.{tex,pdf}` — 9-page plain-language method document with the ambiguity analysis, generator/stress controls, PR protocol, and current benchmark labeling.
 - `README.md`, `requirements.txt`, `pyproject.toml`, `results/experiments.csv`, `docs/EXTERNAL_RESOURCES.md` — all rewritten for localization.
 
 ---
