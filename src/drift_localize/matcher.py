@@ -88,7 +88,8 @@ def _fine_score(reference_f: np.ndarray, search: np.ndarray,
 
 def predict(reference_path: str, search_path: str, *,
             scales=DEFAULT_SCALES, topk: int = 5, verify: bool = False,
-            tie_margin: float = 0.03) -> LocalizeResult:
+            tie_margin: float = 0.03,
+            center_tiebreak: bool = True) -> LocalizeResult:
     """Localize the Reference field of view inside the Search image.
 
     Parameters
@@ -103,6 +104,12 @@ def predict(reference_path: str, search_path: str, *,
         If True, re-rank the top peaks with the fine-resolution NCC stage.
     tie_margin : float
         Score gap under which a competing peak counts as a tie (ambiguity).
+    center_tiebreak : bool
+        When several peaks tie, follow the official Drift-Sense rule and
+        report the tile whose center is closest to the search image center.
+        Default True (spec-compliant). Set False to always take the highest
+        correlation peak; on our crop-labeled synthetic GT that scores higher,
+        but it does not follow the stated scoring convention.
     """
     reference = cv2.imread(reference_path, cv2.IMREAD_GRAYSCALE)
     search = cv2.imread(search_path, cv2.IMREAD_GRAYSCALE)
@@ -128,21 +135,38 @@ def predict(reference_path: str, search_path: str, *,
                               0.0, float("nan"), 0, True)
 
     if verify:
-        rescored = [
+        # (rank_score, coarse_score, x, y, dx, dy, tw, th, scale)
+        ranked = [
             (_fine_score(reference_f, search, x, y, tw, th) + 0.1 * s,
              s, x, y, dx, dy, tw, th, scale)
             for (s, x, y, dx, dy, tw, th, scale) in candidates
         ]
-        rescored.sort(reverse=True)
-        _, score, x, y, dx, dy, tw, th, scale = rescored[0]
-        ranking = np.array([r[0] for r in rescored])
     else:
-        candidates.sort(reverse=True)
-        score, x, y, dx, dy, tw, th, scale = candidates[0]
-        ranking = np.array([c[0] for c in candidates])
+        ranked = [(s, s, x, y, dx, dy, tw, th, scale)
+                  for (s, x, y, dx, dy, tw, th, scale) in candidates]
+    ranked.sort(reverse=True)
+    ranking = np.array([r[0] for r in ranked])
 
     best = ranking[0]
-    n_tied = int((ranking >= best - tie_margin).sum())
+    # Peaks whose rank-score is within tie_margin of the best are "tied".
+    tied = [r for r in ranked if r[0] >= best - tie_margin]
+    n_tied = len(tied)
+
+    # Spec: when more than one region matches, report the tile whose center
+    # is closest to the search image's center; otherwise the single best peak.
+    sh, sw = search.shape
+    scx, scy = sw / 2.0, sh / 2.0
+
+    def _center(r):
+        _, _, x, y, dx, dy, tw, th, _ = r
+        return (x + dx + tw / 2.0, y + dy + th / 2.0)
+
+    if n_tied > 1 and center_tiebreak:
+        winner = min(tied, key=lambda r: (lambda c: (c[0] - scx) ** 2 + (c[1] - scy) ** 2)(_center(r)))
+    else:
+        winner = ranked[0]
+
+    _, score, x, y, dx, dy, tw, th, scale = winner
     cx = x + dx + tw / 2.0
     cy = y + dy + th / 2.0
     return LocalizeResult(cx, cy, float(score), float(scale), n_tied, n_tied > 1)
