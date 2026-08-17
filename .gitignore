@@ -49,6 +49,9 @@ Thumbs.db
 .smoke-work/
 *.log
 !docs/*.log
+docs/submission/*.aux
+docs/submission/*.out
+docs/submission/*.toc
 runs/_smoke_restored/
 runs/_smoke_restored_report.json
 runs/_gate*
