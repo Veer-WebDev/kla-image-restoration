@@ -1,0 +1,38 @@
+{
+  "manifest": "C:\\Users\\Administrator\\Projects\\kla-image-restoration\\data\\drift_sense_space\\output\\test_big\\manifest.csv",
+  "verify": true,
+  "ms_per_sample": 470.0314795970917,
+  "overall": {
+    "n": 200,
+    "mean_px": 44.42361088699425,
+    "median_px": 1.0349410163743724,
+    "p90_px": 99.49064102425389,
+    "max_px": 786.383165527267,
+    "success_at_2px": 0.74,
+    "success_at_5px": 0.74,
+    "success_at_10px": 0.755,
+    "success_at_20px": 0.77
+  },
+  "flagged_unique": {
+    "n": 94,
+    "mean_px": 1.2248509283546372,
+    "median_px": 0.825528053037281,
+    "p90_px": 1.392977508739156,
+    "max_px": 19.63320025391486,
+    "success_at_2px": 0.9787234042553191,
+    "success_at_5px": 0.9787234042553191,
+    "success_at_10px": 0.9787234042553191,
+    "success_at_20px": 1.0
+  },
+  "flagged_ambiguous": {
+    "n": 106,
+    "mean_px": 82.73194518993881,
+    "median_px": 1.425467073524644,
+    "p90_px": 193.00452257447694,
+    "max_px": 786.383165527267,
+    "success_at_2px": 0.5283018867924528,
+    "success_at_5px": 0.5283018867924528,
+    "success_at_10px": 0.5566037735849056,
+    "success_at_20px": 0.5660377358490566
+  }
+}
