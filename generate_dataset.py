@@ -39,6 +39,18 @@ def main() -> None:
                         "(robustness stress test; FAQ: search is noisier in test data)")
     p.add_argument("--search-readout", type=float, default=5.0,
                    help="additive readout-noise sigma on the search image")
+    p.add_argument("--charging-prob", type=float, default=0.0,
+                   help="expected charging streaks per 100 search-image rows")
+    p.add_argument("--charging-intensity", type=float, default=0.0,
+                   help="relative charging-streak brightness (0 disables)")
+    p.add_argument("--barrel-k", type=float, default=0.0,
+                   help="barrel (+) or pincushion (-) scan distortion")
+    p.add_argument("--rotation-max-deg", type=float, default=0.0,
+                   help="uniform random search rotation in [-value,+value] degrees")
+    p.add_argument("--feature-scale-min", type=float, default=1.0,
+                   help="minimum search feature scale, e.g. 0.8 for slide's -20%%")
+    p.add_argument("--feature-scale-max", type=float, default=1.0,
+                   help="maximum search feature scale, e.g. 1.2 for slide's +20%%")
     p.add_argument("--rgb", action="store_true",
                    help="bonus: render optical-microscope-style 3-channel RGB "
                         "instead of grayscale SEM")
@@ -58,7 +70,12 @@ def main() -> None:
             arch = args.arch
         s = generator.generate_sample(
             arch, rng, search_speckle_sigma=args.search_speckle,
-            search_readout_sigma=args.search_readout, rgb=args.rgb)
+            search_readout_sigma=args.search_readout, rgb=args.rgb,
+            charging_prob=args.charging_prob,
+            charging_intensity=args.charging_intensity,
+            barrel_k=args.barrel_k, rotation_max_deg=args.rotation_max_deg,
+            feature_scale_min=args.feature_scale_min,
+            feature_scale_max=args.feature_scale_max)
         rid = f"{i:05d}"
         ref_path = os.path.join("reference", f"{rid}.png")
         srch_path = os.path.join("search", f"{rid}.png")
@@ -75,7 +92,8 @@ def main() -> None:
         w.writeheader()
         w.writerows(rows)
     print(f"wrote {args.n} pairs to {args.out} (seed={args.seed}, "
-          f"speckle={args.search_speckle}); manifest {manifest}")
+          f"speckle={args.search_speckle}, feature-scale="
+          f"[{args.feature_scale_min}, {args.feature_scale_max}]); manifest {manifest}")
 
 
 if __name__ == "__main__":

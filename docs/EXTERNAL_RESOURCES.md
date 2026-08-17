@@ -27,7 +27,7 @@ used. Noise/imaging choices and their public sources:
 | Shot noise (dose) | Poisson counts scaled by dose | Janesick, *Photon Transfer* (SPIE, 2007) |
 | Detector/readout noise | Additive Gaussian, independent per capture | Janesick, *Photon Transfer* (SPIE, 2007) |
 | Speckle (robustness) | Multiplicative `img*(1+N(0,σ))` | Goodman, *Speckle Phenomena in Optics* (2007) |
-| DRAM / FinFET layout | Word/bit lines + contacts; fins + gates | Public device-structure descriptions (DRAM folded-bitline; FinFET fin/gate) |
+| DRAM / FinFET layout | Word/bit lines + contacts; fins + gates | [IRDS 2024 More Moore](https://irds.ieee.org/images/files/pdf/2024/2024IRDS_MM.pdf); [IBM, *Opportunities and challenges of FinFET...*](https://research.ibm.com/publications/opportunities-and-challenges-of-finfet-as-a-device-structure-candidate-for-14nm-node-cmos-technology); [EE Times, *Hynix DRAM layout*](https://www.eetimes.com/hynix-dram-layout-process-integration-adapt-to-change/) |
 
 These are the citations to expand in the final presentation (the task requires
 2–3 credible public sources per augmentation/noise choice).

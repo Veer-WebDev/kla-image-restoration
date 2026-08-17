@@ -237,6 +237,26 @@ def _rotate_small(img: np.ndarray, deg: float) -> np.ndarray:
                           borderMode=cv2.BORDER_REFLECT)
 
 
+def _scale_about_center(img: np.ndarray, scale: float) -> np.ndarray:
+    """Apply a small isotropic feature-scale (CD/magnification) mismatch.
+
+    The task slides ask for polygon scaling of -20% to +20%.  At the rendered
+    image level, an affine scale about the scan-field center is the faithful
+    equivalent: every drawn polygon becomes wider/narrower and its position is
+    transformed consistently.  It is deliberately applied to the Search only
+    so the localizer is tested against a cross-capture scale mismatch.  The
+    caller transforms the ground-truth location by the same affine map.
+    """
+    if scale <= 0:
+        raise ValueError("feature scale must be positive")
+    if abs(scale - 1.0) < 1e-6:
+        return img
+    h, w = img.shape[:2]
+    M = cv2.getRotationMatrix2D((w / 2.0, h / 2.0), 0.0, scale)
+    return cv2.warpAffine(img, M, (w, h), flags=cv2.INTER_LINEAR,
+                          borderMode=cv2.BORDER_REFLECT)
+
+
 def _apply_sem_noise(img: np.ndarray, rng: np.random.Generator, *,
                      dose: float, readout_sigma: float, speckle_sigma: float,
                      edge_strength: float,
@@ -284,18 +304,21 @@ def image_search(fine_canvas: np.ndarray, rng: np.random.Generator, *,
                  dose: float = 200.0, readout_sigma: float = 5.0,
                  speckle_sigma: float = 0.0, edge_strength: float = 0.6,
                  charging_prob: float = 0.0, charging_intensity: float = 0.0,
-                 barrel_k: float = 0.0, rotation_deg: float = 0.0
+                 barrel_k: float = 0.0, rotation_deg: float = 0.0,
+                 feature_scale: float = 1.0
                  ) -> np.ndarray:
     """Low-dose, noisier wide-search capture: downsample the fine canvas by
     10x (10 nm/px) then apply independent SEM noise."""
     small = cv2.resize(fine_canvas, (REFERENCE_SIZE_PX, REFERENCE_SIZE_PX),
                        interpolation=cv2.INTER_AREA)
-    return _apply_sem_noise(small, rng, dose=dose, readout_sigma=readout_sigma,
-                            speckle_sigma=speckle_sigma,
-                            edge_strength=edge_strength,
-                            charging_prob=charging_prob,
-                            charging_intensity=charging_intensity,
-                            barrel_k=barrel_k, rotation_deg=rotation_deg)
+    capture = _apply_sem_noise(small, rng, dose=dose,
+                               readout_sigma=readout_sigma,
+                               speckle_sigma=speckle_sigma,
+                               edge_strength=edge_strength,
+                               charging_prob=charging_prob,
+                               charging_intensity=charging_intensity,
+                               barrel_k=barrel_k, rotation_deg=rotation_deg)
+    return _scale_about_center(capture, feature_scale)
 
 
 # --------------------------------------------------------------------------
@@ -327,7 +350,9 @@ def generate_sample(architecture: str, rng: np.random.Generator, *,
                     search_readout_sigma: float = 5.0,
                     zoned: bool = True, rgb: bool = False,
                     charging_prob: float = 0.0, charging_intensity: float = 0.0,
-                    barrel_k: float = 0.0, rotation_max_deg: float = 0.0) -> dict:
+                    barrel_k: float = 0.0, rotation_max_deg: float = 0.0,
+                    feature_scale_min: float = 1.0,
+                    feature_scale_max: float = 1.0) -> dict:
     """Generate one reference/search pair with ground-truth center.
 
     Returns a dict with reference_img, search_img (both uint8 1000x1000),
@@ -340,12 +365,19 @@ def generate_sample(architecture: str, rng: np.random.Generator, *,
     Extra search-image augmentations (all default off) mirror the task slides:
     ``charging_prob``/``charging_intensity`` (charging streaks), ``barrel_k``
     (geometric distortion), ``rotation_max_deg`` (a small random rotation, e.g.
-    1-3 deg). These perturb the Search only; the Reference stays clean, which is
-    realistic (reference is a careful high-dose capture).
+    1-3 deg), and ``feature_scale_min``/``feature_scale_max`` (the slide's
+    global -20%..+20% polygon/CD scale sweep). These perturb the Search only;
+    the Reference stays clean, which is realistic (reference is a careful
+    high-dose capture). The returned ground truth is transformed to remain
+    correct under feature scaling.
     """
     if architecture not in _GENERATORS:
         raise ValueError(f"unknown architecture {architecture!r}; "
                          f"choose from {sorted(_GENERATORS)}")
+    if feature_scale_min <= 0 or feature_scale_max <= 0:
+        raise ValueError("feature scale bounds must be positive")
+    if feature_scale_min > feature_scale_max:
+        raise ValueError("feature_scale_min must be <= feature_scale_max")
     if zoned:
         fine = generate_zoned_canvas(FINE_CANVAS_SIZE_PX, architecture, rng)
     else:
@@ -358,11 +390,13 @@ def generate_sample(architecture: str, rng: np.random.Generator, *,
 
     reference_img = image_reference(crop, rng)
     rot = float(rng.uniform(-rotation_max_deg, rotation_max_deg)) if rotation_max_deg else 0.0
+    feature_scale = float(rng.uniform(feature_scale_min, feature_scale_max))
     search_img = image_search(fine, rng, speckle_sigma=search_speckle_sigma,
                               readout_sigma=search_readout_sigma,
                               charging_prob=charging_prob,
                               charging_intensity=charging_intensity,
-                              barrel_k=barrel_k, rotation_deg=rot)
+                              barrel_k=barrel_k, rotation_deg=rot,
+                              feature_scale=feature_scale)
 
     if rgb:
         reference_img = _to_optical_rgb(reference_img, rng)
@@ -371,5 +405,11 @@ def generate_sample(architecture: str, rng: np.random.Generator, *,
     box = REFERENCE_SIZE_PX // SCALE_FACTOR  # 100
     gt_x = x0 / SCALE_FACTOR + box / 2.0
     gt_y = y0 / SCALE_FACTOR + box / 2.0
+    # Keep the label in the transformed Search coordinate system. The affine
+    # scale is around the (500, 500) scan-field center.
+    search_center = REFERENCE_SIZE_PX / 2.0
+    gt_x = search_center + feature_scale * (gt_x - search_center)
+    gt_y = search_center + feature_scale * (gt_y - search_center)
     return {"reference_img": reference_img, "search_img": search_img,
-            "gt_x": gt_x, "gt_y": gt_y, "architecture": architecture}
+            "gt_x": gt_x, "gt_y": gt_y, "architecture": architecture,
+            "feature_scale": feature_scale, "rotation_deg": rot}

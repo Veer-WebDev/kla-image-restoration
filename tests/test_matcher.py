@@ -102,6 +102,24 @@ def test_center_tiebreak_selects_center_closest(tmp_path):
     assert d_on <= d_off + 1e-6
 
 
+def test_rotation_search_recovers_small_search_rotation(tmp_path):
+    # A scan/stage rotation changes the expected reference-center coordinate.
+    # The angle sweep must recover that transformed location on unique texture.
+    search = _unique_search(seed=8)
+    ref_path, srch_path, gx, gy = _make_pair(tmp_path, search, (300, 450))
+    angle = 3.0
+    matrix = cv2.getRotationMatrix2D((500.0, 500.0), angle, 1.0)
+    rotated = cv2.warpAffine(search, matrix, (1000, 1000),
+                             flags=cv2.INTER_LINEAR,
+                             borderMode=cv2.BORDER_REFLECT)
+    cv2.imwrite(srch_path, rotated)
+    expected_x = matrix[0, 0] * gx + matrix[0, 1] * gy + matrix[0, 2]
+    expected_y = matrix[1, 0] * gx + matrix[1, 1] * gy + matrix[1, 2]
+    res = predict(ref_path, srch_path, angles=(-3.0, 0.0, 3.0))
+    err = ((res.x - expected_x) ** 2 + (res.y - expected_y) ** 2) ** 0.5
+    assert err < 3.0, f"rotation-aware error {err:.2f}px too large"
+
+
 def test_generator_produces_findable_pair(tmp_path):
     # A zoned canvas with fiducials should yield at least one sample the
     # matcher localizes to within a few pixels (closed loop: generate->match).

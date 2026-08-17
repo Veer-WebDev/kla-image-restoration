@@ -59,19 +59,31 @@ def _parabolic_subpixel(response: np.ndarray, x: int, y: int) -> tuple[float, fl
     return float(np.clip(dx, -1, 1)), float(np.clip(dy, -1, 1))
 
 
-def _rotate_template(template: np.ndarray, deg: float):
-    """Rotate a template about its center, returning (rotated, mask). The mask
-    marks the valid (non-corner) pixels so matchTemplate can ignore the zero
-    padding introduced by rotation."""
-    if abs(deg) < 1e-9:
-        return template, None
-    h, w = template.shape
-    M = cv2.getRotationMatrix2D((w / 2.0, h / 2.0), deg, 1.0)
-    rot = cv2.warpAffine(template, M, (w, h), flags=cv2.INTER_LINEAR,
-                         borderValue=0)
-    mask = cv2.warpAffine(np.full((h, w), 255, np.uint8), M, (w, h),
-                          flags=cv2.INTER_NEAREST, borderValue=0)
-    return rot, mask
+def _correct_search_rotation(search: np.ndarray, angle: float) -> np.ndarray:
+    """Undo a candidate Search rotation before ordinary NCC.
+
+    Rotating the Search rather than the template keeps the Reference intact and
+    lets every angle use OpenCV's stronger, directly comparable
+    ``TM_CCOEFF_NORMED`` statistic. ``angle`` is the hypothesized rotation in
+    the observed Search, so correction applies its inverse.
+    """
+    if abs(angle) < 1e-9:
+        return search
+    h, w = search.shape
+    inverse = cv2.getRotationMatrix2D((w / 2.0, h / 2.0), -angle, 1.0)
+    return cv2.warpAffine(search, inverse, (w, h), flags=cv2.INTER_LINEAR,
+                          borderMode=cv2.BORDER_REFLECT)
+
+
+def _map_corrected_point_to_search(x: float, y: float,
+                                   search_shape: tuple[int, int], angle: float) -> tuple[float, float]:
+    """Map a coordinate in an inverse-rotated Search back to observed pixels."""
+    if abs(angle) < 1e-9:
+        return x, y
+    h, w = search_shape
+    forward = cv2.getRotationMatrix2D((w / 2.0, h / 2.0), angle, 1.0)
+    return (float(forward[0, 0] * x + forward[0, 1] * y + forward[0, 2]),
+            float(forward[1, 0] * x + forward[1, 1] * y + forward[1, 2]))
 
 
 def _iter_peaks(response: np.ndarray, k: int, min_dist: int):
@@ -131,9 +143,9 @@ def predict(reference_path: str, search_path: str, *,
         correlation peak; on our crop-labeled synthetic GT that scores higher,
         but it does not follow the stated scoring convention.
     angles : iterable of float
-        Template rotations (degrees) to search. Default (0.0,) = no rotation
-        search (fastest). Pass e.g. (-3,-2,-1,0,1,2,3) to be robust to a small
-        reference/search misalignment, at a proportional runtime cost.
+        Candidate rotations (degrees) in the observed Search. Default (0.0,)
+        = no rotation search (fastest). Pass e.g. (-3,-2,-1,0,1,2,3) to search
+        for a small reference/search scan misalignment at proportional cost.
     """
     reference = cv2.imread(reference_path, cv2.IMREAD_GRAYSCALE)
     search = cv2.imread(search_path, cv2.IMREAD_GRAYSCALE)
@@ -142,10 +154,9 @@ def predict(reference_path: str, search_path: str, *,
     reference_f = reference.astype(np.float32)
     Rh, Rw = reference.shape
 
-    candidates = []  # (coarse_score, x, y, dx, dy, tw, th, scale)
-    # When searching rotations we must score every angle (including 0) with the
-    # same method, so their scores are comparable. Masked TM_CCORR_NORMED works
-    # with a rotation mask; without rotation we keep the stronger TM_CCOEFF.
+    candidates = []  # (score, x, y, dx, dy, tw, th, scale, search_angle)
+    # Each candidate rotation is corrected in the Search, allowing every pass to
+    # retain ordinary CCOEFF NCC instead of a weaker masked correlation score.
     rotation_search = any(abs(float(a)) > 1e-9 for a in angles)
     for scale in scales:
         tw = max(int(round(Rw / scale)), 1)
@@ -154,36 +165,30 @@ def predict(reference_path: str, search_path: str, *,
             continue
         template = cv2.resize(reference, (tw, th), interpolation=cv2.INTER_AREA)
         for angle in angles:
-            tmpl, mask = _rotate_template(template, float(angle))
-            if not rotation_search:
-                response = cv2.matchTemplate(search, tmpl, cv2.TM_CCOEFF_NORMED)
-            elif mask is None:
-                full = np.full(tmpl.shape, 255, np.uint8)
-                response = cv2.matchTemplate(search, tmpl, cv2.TM_CCORR_NORMED,
-                                             mask=full)
-            else:
-                response = cv2.matchTemplate(search, tmpl, cv2.TM_CCORR_NORMED,
-                                             mask=mask)
+            corrected_search = _correct_search_rotation(search, float(angle))
+            response = cv2.matchTemplate(corrected_search, template,
+                                         cv2.TM_CCOEFF_NORMED)
             response = np.nan_to_num(response, nan=0.0, posinf=0.0, neginf=0.0)
             for score, x, y in _iter_peaks(response, topk, max(tw, th) // 2):
                 dx, dy = _parabolic_subpixel(response, x, y)
-                candidates.append((float(score), x, y, dx, dy, tw, th, scale))
+                candidates.append((float(score), x, y, dx, dy, tw, th, scale,
+                                   float(angle)))
 
     if not candidates:
         return LocalizeResult(search.shape[1] / 2.0, search.shape[0] / 2.0,
                               0.0, float("nan"), 0, True)
 
-    if verify:
-        # (rank_score, coarse_score, x, y, dx, dy, tw, th, scale)
+    if verify and not rotation_search:
+        # (rank_score, coarse_score, x, y, dx, dy, tw, th, scale, angle)
         ranked = [
             (_fine_score(reference_f, search, x, y, tw, th) + 0.1 * s,
-             s, x, y, dx, dy, tw, th, scale)
-            for (s, x, y, dx, dy, tw, th, scale) in candidates
+             s, x, y, dx, dy, tw, th, scale, angle)
+            for (s, x, y, dx, dy, tw, th, scale, angle) in candidates
         ]
     else:
-        ranked = [(s, s, x, y, dx, dy, tw, th, scale)
-                  for (s, x, y, dx, dy, tw, th, scale) in candidates]
-    ranked.sort(reverse=True)
+        ranked = [(s, s, x, y, dx, dy, tw, th, scale, angle)
+                  for (s, x, y, dx, dy, tw, th, scale, angle) in candidates]
+    ranked.sort(key=lambda r: r[0], reverse=True)
     ranking = np.array([r[0] for r in ranked])
 
     best = ranking[0]
@@ -197,15 +202,18 @@ def predict(reference_path: str, search_path: str, *,
     scx, scy = sw / 2.0, sh / 2.0
 
     def _center(r):
-        _, _, x, y, dx, dy, tw, th, _ = r
-        return (x + dx + tw / 2.0, y + dy + th / 2.0)
+        _, _, x, y, dx, dy, tw, th, _, angle = r
+        return _map_corrected_point_to_search(x + dx + tw / 2.0,
+                                              y + dy + th / 2.0,
+                                              search.shape, angle)
 
     if n_tied > 1 and center_tiebreak:
         winner = min(tied, key=lambda r: (lambda c: (c[0] - scx) ** 2 + (c[1] - scy) ** 2)(_center(r)))
     else:
         winner = ranked[0]
 
-    _, score, x, y, dx, dy, tw, th, scale = winner
-    cx = x + dx + tw / 2.0
-    cy = y + dy + th / 2.0
+    _, score, x, y, dx, dy, tw, th, scale, angle = winner
+    cx, cy = _map_corrected_point_to_search(x + dx + tw / 2.0,
+                                            y + dy + th / 2.0,
+                                            search.shape, angle)
     return LocalizeResult(cx, cy, float(score), float(scale), n_tied, n_tied > 1)
