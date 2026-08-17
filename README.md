@@ -93,10 +93,48 @@ python infer.py --reference ref.png --search search.png
 
 ## Generate synthetic data
 
-The Drift-Sense synthetic generator (Applied Materials Hugging Face Space) is
-not redistributed here; see `docs/submission/` for how splits were produced.
-Each split is a directory with `reference/`, `search/` and a `manifest.csv`
-(columns `id, architecture, reference_path, search_path, gt_x, gt_y`).
+Per the task rules ("no dataset is provided; participants shall generate their
+own"), this repo ships a self-contained generator built only from publicly
+known DRAM/FinFET structural characteristics and literature-backed SEM noise
+models (see `src/drift_localize/generator.py` and `docs/EXTERNAL_RESOURCES.md`
+for citations):
+
+```bash
+python generate_dataset.py --out data/mydata --n 30 --seed 31337
+# noisier search images (robustness stress test):
+python generate_dataset.py --out data/noisy --n 30 --search-speckle 0.6
+```
+
+It writes `reference/`, `search/`, and a `manifest.csv` (columns
+`id, architecture, reference_path, search_path, gt_x, gt_y`) directly consumable
+by `evaluate.py`. The generator composes periodic array "mats" separated by
+irregular strips and a sparse constellation of alignment fiducials, so most
+crops carry a locally-unique landmark while purely periodic regions remain
+genuinely ambiguous (the honest failure mode).
+
+### Noise robustness (FAQ: "search image will be noisier in test data")
+
+Sweeping multiplicative speckle on the Search image (30 samples each, own
+generator):
+
+| search speckle σ | success@5px | unique subset | ambiguous subset |
+| --- | --- | --- | --- |
+| 0.0 | 86.7% | 22/30 @ 100% | 8/30 @ 50% |
+| 0.3 | 60.0% | 14/30 @ 100% | 16/30 @ 31% |
+| 0.6 | 36.7% | 5/30 @ 100% | 25/30 @ 24% |
+
+The key result: the **unique-peak subset stays 100% correct (~0.05 px median)
+at every noise level**. Noise does not corrupt confident matches; it *shrinks*
+the confident subset as fiducials get buried, which the ambiguity flag reports
+honestly.
+
+## Ambiguous-tile tie-break
+
+The task says: if more than one region matches, report the one **closest to the
+Search image centre**. The matcher implements this (`center_tiebreak=True`,
+default). On our crop-labelled synthetic ground truth a plain highest-peak
+choice scores higher, but it does not follow the stated convention; the flag
+`center_tiebreak=False` exposes that behaviour for comparison.
 
 ## Evaluate over a dataset
 

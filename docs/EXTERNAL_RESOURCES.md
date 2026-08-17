@@ -13,23 +13,40 @@ used in this repository.
 The solver has no deep-learning dependency and requires no network access or
 GPU at inference time.
 
-## Drift-Sense synthetic data generator
+## Our own synthetic data generator
+
+`src/drift_localize/generator.py` is a **self-contained reimplementation** that
+produces DRAM- and FinFET-style Reference/Search pairs with ground-truth centres.
+It is built only from publicly known structural characteristics and standard SEM
+imaging models. No proprietary fab data and no code from any external Space are
+used. Noise/imaging choices and their public sources:
+
+| Effect | Model | Public source |
+|---|---|---|
+| Edge brightening | Add gradient magnitude at feature sidewalls | Reimer, *Scanning Electron Microscopy* (Springer, 2nd ed.), SE contrast chapter |
+| Shot noise (dose) | Poisson counts scaled by dose | Janesick, *Photon Transfer* (SPIE, 2007) |
+| Detector/readout noise | Additive Gaussian, independent per capture | Janesick, *Photon Transfer* (SPIE, 2007) |
+| Speckle (robustness) | Multiplicative `img*(1+N(0,σ))` | Goodman, *Speckle Phenomena in Optics* (2007) |
+| DRAM / FinFET layout | Word/bit lines + contacts; fins + gates | Public device-structure descriptions (DRAM folded-bitline; FinFET fin/gate) |
+
+These are the citations to expand in the final presentation (the task requires
+2–3 credible public sources per augmentation/noise choice).
+
+## Drift-Sense synthetic data generator (external, reference only)
 
 - **Name:** Drift-Sense Synthetic Dataset Generator
 - **URL:** https://huggingface.co/spaces/aayushraina21/drift-sense-synthetic-data
 - **Purpose:** generates synthetic Reference/Search image pairs with ground-truth
   centre coordinates for the Applied Materials Drift-Sense localization task,
   which is exactly the task this repository solves.
-- **How it is used here:** the generator is run **locally** to produce seeded
-  train/val/test splits used only to *measure* the solver. The generator code is
-  **not vendored or redistributed** in this repository. No generated pixels are
-  committed; only aggregate metrics (in `results/experiments.csv` and
-  `results/localize_*.json`) are.
+- **How it is used here:** run **locally** to produce seeded splits used only to
+  *measure* the solver (the `test_big` numbers). The generator code is **not
+  vendored or redistributed**. Our own submission uses the independent generator
+  above; this Space is a measurement fixture only.
 - **Licence caution:** at the inspected revision the Space exposed no explicit
-  `LICENSE` file. Because the solver here is a clean, independent reimplementation
-  of standard normalized cross-correlation (OpenCV `matchTemplate`) and contains
-  **no code copied** from the Space, its licensing status does not encumber this
-  repository. The generator is treated purely as an external measurement fixture.
+  `LICENSE` file. Because our solver and our generator are clean, independent
+  implementations containing **no code copied** from the Space, its licensing
+  status does not encumber this repository.
 
 ## Honesty notes
 
