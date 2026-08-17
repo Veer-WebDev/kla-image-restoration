@@ -57,3 +57,5 @@ runs/_smoke_restored_report.json
 runs/_gate*
 # Throwaway probes kept at the repo root while diagnosing platform behaviour.
 /_*.py
+"data/kla_big/"  
+"data/sources_big/"  
