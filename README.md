@@ -1,5 +1,13 @@
 # Drift-Sense Reference Localization
 
+> **Submission-bound warning (2026-08-17):** The supplied
+> `KLA_Problem Statement_Studen help document.pdf` defines a different,
+> **AI image-restoration** challenge. This repository is a Reference/Search
+> localization prototype and is **not eligible for that restoration submission**
+> in its current form. See
+> [`docs/submission/KLA_RESTORATION_COMPLIANCE_AUDIT.md`](docs/submission/KLA_RESTORATION_COMPLIANCE_AUDIT.md)
+> before packaging or submitting anything.
+
 A deterministic, submission-oriented solver for the Applied Materials
 **"Drift-Sense"** localization task (KLA / Applied Materials SEMICON India
 Hackathon 2026).
