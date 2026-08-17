@@ -40,19 +40,26 @@
 
 | Method | Success@10px | Median err | Mean err | p90 err | Max err | Time/sample |
 |---|---|---|---|---|---|---|
-| **NCC (default)** | **75.5%** | 1.03 px | 44.90 px | 99.49 px | 786.4 px | **156 ms** |
-| NCC + verification | 75.5% | 1.03 px | 44.42 px | 99.49 px | 786.4 px | 470 ms |
+| **NCC, official center tie-break** | **59.0%** | 1.33 px | 76.96 px | 155.49 px | 955.1 px | **209 ms** |
+| NCC raw highest peak (legacy crop-label diagnostic, non-compliant) | 75.5% | 1.03 px | 44.90 px | 99.49 px | 786.4 px | 156 ms |
 
-**Decision:** verification stage → identical accuracy at **3× runtime** ⇒ shipped **off by default**.
+**Decision:** official center tie-break → shipped by default. The external
+fixture uses arbitrary crop labels, so its raw highest-peak diagnostic (75.5%)
+is not spec-compliant. Fine verification matched the old raw result at about 3×
+runtime, so it remains off by default.
 
 ### 3.2 The key split — matcher's own ambiguity flag
 
 | Subset (self-flagged) | Count | Success@10px | Median | Mean | p90 |
 |---|---|---|---|---|---|
 | **Unique correlation peak** | 92 | **97.8%** | 0.83 px | 1.24 px | 1.39 px |
-| Ambiguous (competing peaks) | 108 | 56.5% | 1.41 px | 82.10 px | 184.5 px |
+| Ambiguous (competing peaks) | 108 | 25.9% | 73.93 px | 141.46 px | 469.99 px |
 
-**Interpretation:** the aggregate 75.5% is the sum of two populations — an *easy* one solved to ~1px, and a *genuinely ambiguous* one (periodic arrays) that no single-image method can resolve. The matcher's flag is a calibrated confidence signal (98% correct when it claims "unique").
+**Interpretation:** the spec-compliant 59.0% is an adverse but honest measure
+on an external fixture whose arbitrary crop labels diverge from the task's
+nearest-center tie rule. Unique peaks remain 97.8% correct; ambiguous scenes are
+both physically difficult and convention-sensitive. The matcher exposes that
+risk as a confidence signal.
 
 ---
 
@@ -143,3 +150,109 @@ graph TD
 - Deterministic: seed 31337, disjoint splits, ledger in `results/experiments.csv`.
 - External generator (HF Space `aayushraina21/drift-sense-synthetic-data`) used only as a measurement fixture — not vendored, no code copied; NCC is a clean reimplementation.
 - Inference requires no GPU, no internet, no learned weights.
+
+---
+
+## 8. Continuation log: rubric implementation, alternatives, and feedback loops
+
+This section records the post-handoff continuation prompted by the organiser slides.
+It supersedes stale counts and page numbers above where they conflict.
+
+### 8.1 Updated artifacts and actual validation
+
+| Item | Current state | Evidence |
+|---|---|---|
+| Architecture PDF | **8 pages**, freshly compiled twice with MiKTeX | `docs/submission/model_architecture.pdf`; `pdflatex` exit 0 twice |
+| Unit tests | **10 passed** | `.venv\\Scripts\\python.exe -m pytest -q` after current matcher/generator changes |
+| Public CLI evaluation | Supports `--cm-thresholds 1 5`, optional robustness `--scales` and `--angles` | Generated-manifest smoke completed and JSON saved |
+| PR-vs-noise study | New self-contained `analysis/noise_sweep.py` | 30 calibration + 30 held-out generated pairs at each of sigma 0, 0.3, 0.6 |
+| 1--5 px “confusion matrix” | Honest positive-pair summary: TP=within tolerance, FN=miss, TN/FP undefined for ordinary manifests | `evaluate.py` emits console and JSON fields without inventing negative examples |
+| Polygon/CD scale | Implemented as a global Search affine feature-scale augmentation, 0.8x--1.2x, with GT transformed identically | `generator.generate_sample(...feature_scale_min=0.8, feature_scale_max=1.2)` and CLI flags |
+| Charging / distortion / rotation | Implemented in generator | charging streak, radial barrel/pincushion, random 1--3 degree Search rotation |
+| RGB bonus | Implemented earlier, preserved | `--rgb`, 3-channel optical-style images; luminance NCC localizes them |
+
+### 8.2 New decision tree
+
+```mermaid
+graph TD
+    A[Read organiser slides] --> B{Requirement missing?}
+    B -->|Noise PR study| C[Implement seeded calibration/test sweep]
+    C --> D[No plotting package: write portable SVG + JSON]
+    D --> E[Run 30 calibration + 30 held-out pairs per level]
+
+    B -->|1--5px CM| F{Does the dataset have negative pairs?}
+    F -->|No: every pair has a GT match| G[Do not fabricate TN/FP]
+    G --> H[Report TP within tolerance + FN outside tolerance]
+    H --> I[For a true PR curve: score-threshold accepted predictions]
+
+    B -->|Polygon scale -20..20%| J[Affine-scale Search about its centre]
+    J --> K[Transform GT by same known map]
+    K --> L[Expose min/max CLI controls]
+
+    B -->|1--3 degree rotation| M[Try rotated template + masked CCORR]
+    M --> N[Measured worse: 20% to 5% on old 20-case probe]
+    N --> O[Reject approach]
+    O --> P[Try masked zero-mean NCC]
+    P --> Q[Geometric unit test passes but SEM-like smoke gives no gain]
+    Q --> R[Replace with Search derotation + normal NCC]
+    R --> S[Geometric unique-texture test passes]
+    S --> T[SEM-like 2-case check is worse and about 8.6x slower]
+    T --> U[Keep only opt-in study path; default remains fast NCC]
+
+    B -->|Kaggle/DL/Colab| V{Would it create paired 10x GT and beat NCC?}
+    V -->|No evidence, external unpaired images| W[Do not add as training data]
+    V -->|No active Colab tab; CPU public paths validated locally| X[Provide Colab-compatible scripts rather than fabricate GPU run]
+
+    E --> DONE[Commit code, JSON ledger, docs, and PDF]
+    U --> DONE
+    L --> DONE
+```
+
+### 8.3 PR-vs-noise held-out result ledger
+
+Protocol: for each Search-speckle setting, use 30 seeded generated calibration
+pairs to choose the NCC score threshold with best F1 at 5 px, then evaluate that
+fixed threshold on a different 30-pair seeded generated test set. These are
+**synthetic** measurements only.
+
+| Search speckle σ | Calibration-selected score threshold | Held-out precision | Held-out recall | Accepted share | Interpretation |
+|---:|---:|---:|---:|---:|---|
+| 0.0 | 0.725 | 79.2% | 82.6% | 80.0% | Score is moderately useful for acceptance |
+| 0.3 | 0.639 | 92.3% | 63.2% | 43.3% | More selective but lower recall |
+| 0.6 | 0.399 | 27.8% | 100.0% | 60.0% | Confidence threshold is not useful under heavy noise |
+
+Canonical files: `results/noise_sweep_seed777.json` and ignored derivative
+`results/noise_sweep_seed777.svg` (the plot can be regenerated by the exact
+command below).
+
+```cmd
+.venv\Scripts\python.exe analysis\noise_sweep.py --out results\noise_sweep_seed777 --levels 0 0.3 0.6 --calibration-n 30 --test-n 30 --seed 777
+```
+
+### 8.4 Geometric alternative results and decisions
+
+| Attempt | Evaluation | Outcome | Decision |
+|---|---|---|---|
+| Default NCC on 2 seeded ±3° generated Search cases | mean 8.74 px | Baseline for this tiny smoke check | Keep default route |
+| Rotated template, masked `TM_CCORR_NORMED` | prior 20-case ±3° probe: 20%→5% at 5px | Masked CCORR scores were a weaker discriminator | Removed |
+| Masked zero-mean NCC | unique-texture rotation unit test passes; two SEM-like cases mean 8.86 px and ~2.2s/sample | No measurable practical improvement | Replaced |
+| Derotate Search, then ordinary `TM_CCOEFF_NORMED` | unique-texture rotation unit test passes; same two SEM-like cases mean 296.82 px and ~1.50s/sample | Much worse in this SEM-like check | **Not default**, preserve only as opt-in diagnostic |
+| Wide NCC scale candidates 8x--12x | two arbitrary-crop scale cases, raw argmax: mean 0.17 px | Establishes that scale search can match known affine scale labels | Optional evaluation study only because official tie-break remains mandatory |
+| Fine-resolution verification | external synthetic test_big n=200: same 75.5% success@10, 3x runtime | Complexity does not buy accuracy | Default off |
+| SIFT + BF ratio matching + RANSAC homography | fixed external synthetic `test`, n=40: 0.0% at 5px/10px, median 411.31 px, 260 ms/sample, median 0 inliers | Sparse keypoints disappear at 10x downsampling and repetitive geometry leaves no reliable correspondence | Not deployed |
+| Generic deep learning, Kaggle data | no paired Reference/Search ground truth or measured improvement | Would add noncompliance and a training dependency | Not added |
+
+### 8.5 Exact current logs, prompts, and limits
+
+- Jcode logs: `C:\Users\Administrator\.jcode\logs\`
+- Prompt history: `C:\Users\Administrator\.jcode\prompt-history.jsonl`
+- Sessions: `C:\Users\Administrator\.jcode\sessions\`
+- Master continuation prompt: `docs/submission/CODEX_MASTER_PROMPT.md`
+- Detailed agent handoff: `docs/submission/HANDOFF.md`
+- This cumulative decision log: `docs/submission/RUN_REPORT.md`
+
+A GPU/Colab run is not represented as completed here. There was no active Colab
+runtime among the accessible browser tabs in this continuation, and NCC is a
+CPU-only algorithm. The same public scripts run in Colab after cloning or
+uploading this repository, but an actual Colab result should only be added after
+it runs and produces a saved console/log artifact.

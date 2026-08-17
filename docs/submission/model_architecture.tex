@@ -340,6 +340,45 @@ about} (fiducials get buried), and the ambiguity flag reports that honestly.
 That is exactly the behaviour a real inspection tool wants under degraded
 imaging.
 
+\subsection{Slide-aligned geometric stress cases}
+The generator also exposes the four geometric effects named in the organiser's
+slides: charging streaks, radial barrel/pincushion scan distortion, a random
+$\pm1$--$3^\circ$ Search rotation, and global feature (polygon/CD) scale from
+$0.8\times$ to $1.2\times$.  The scale transform is applied about the Search
+centre and the ground-truth coordinate is transformed by the same known affine
+map, so it remains a valid labelled localization example.
+
+These controls are deliberately not presented as a solved robustness claim.
+The default NCC scale sweep covers the normal calibration range. A wider
+synthetic scale sweep recovered an arbitrary-crop smoke case at $0.17$ px mean
+error on two seeded cases when the raw maximum was used. This is a diagnostic,
+not a headline result: the official centre tie-break is retained by default.
+Rotation and strong radial distortion remain difficult in the SEM-like stress
+generator. We implemented a rotation-corrected Search sweep and proved it on a
+unique-texture geometric unit test, but it did not improve the two-image
+SEM-like smoke check and costs roughly an order of magnitude more time. It is
+therefore an opt-in study option, not the deployment default. This is reported
+so the next iteration improves a measured weakness rather than concealing it.
+
+\subsection{Confidence precision--recall, not a fabricated classifier CM}
+Every localization manifest row contains a positive Reference/Search pair. A
+normal four-cell classification confusion matrix is therefore not defined:
+there are no negative pairs from which to count true negatives or false
+positives. The evaluator reports the two meaningful cells at 1 px and 5 px:
+within-tolerance localizations (TP) and misses (FN). For a confidence study, we
+make a prediction ``accepted'' only when its NCC peak score crosses a threshold;
+accepted wrong positions then become FP and rejected correct positions become FN.
+
+The reproducible script \texttt{analysis/noise\_sweep.py} fits the threshold on
+30 independent synthetic calibration pairs at each noise level and tests it on
+a separate 30-pair seed. Its SVG plot is committed with the JSON ledger. At 5 px,
+the held-out results were: $\sigma=0.0$, precision $79.2\%$, recall $82.6\%$;
+$\sigma=0.3$, precision $92.3\%$, recall $63.2\%$; and $\sigma=0.6$,
+precision $27.8\%$, recall $100\%$. The last unstable operating point is an
+important negative result: heavy noise destroys the usefulness of peak-score
+thresholding. All three rows are synthetic, 30-pair measurements, not official
+performance.
+
 % ============================ 5. RESULTS ============================
 \section{Measured results (synthetic data)}
 \label{sec:results}
@@ -348,10 +387,11 @@ imaging.
 \fcolorbox{accent}{accent!8}{\parbox{0.95\textwidth}{\centering
 \small\color{accent!60!black}
 The tables below come from real runs of our matcher on $200$ held-out
-samples from the official Drift-Sense \emph{synthetic} generator. They are not
+samples from an external Drift-Sense \emph{synthetic} generator. They are not
 official KLA/Applied Materials performance, and no setting was tuned on this
-set. ``Success@$k$px'' is the fraction of samples localized within $k$ pixels
-of the true centre.}}
+set. The generator's random-crop labels do \emph{not} use the official
+closest-to-Search-centre tie convention; we therefore show the spec-compliant
+run and the historical raw-peak diagnostic separately.}}
 \end{center}
 
 \vspace{0.3cm}
@@ -359,17 +399,20 @@ of the true centre.}}
 \begin{center}
 \begin{tabular}{lccc}
 \toprule
-\term{Method} & \term{Success@10px} & \term{Median error} & \term{Time/sample}\\
+\term{Method / evaluation rule} & \term{Success@10px} & \term{Median error} & \term{Time/sample}\\
 \midrule
-NCC (default)          & $75.5\%$ & $1.03$ px & $156$ ms\\
-NCC + verification     & $75.5\%$ & $1.03$ px & $470$ ms\\
+NCC, official centre tie-break & $59.0\%$ & $1.33$ px & $209$ ms\\
+Raw highest peak (legacy crop-label diagnostic, non-compliant) & $75.5\%$ & $1.03$ px & $156$ ms\\
 \bottomrule
 \end{tabular}
 \end{center}
 
-The verification stage buys nothing on accuracy while tripling the runtime, so
-it stays off by default. The median error near \emph{one pixel} shows that
-when the matcher is right, it is essentially exact.
+The official centre tie-break changes only ambiguous cases. The 59.0\% figure
+is the honest spec-compliant result for this external fixture. The 75.5\%
+raw-peak figure is preserved only as a diagnostic of the fixture's different
+random-crop labelling convention. Fine-resolution verification previously gave
+that raw diagnostic identical accuracy at about three times the runtime, so it
+remains off by default.
 
 \begin{center}
 \begin{tabular}{lccc}
@@ -377,28 +420,28 @@ when the matcher is right, it is essentially exact.
 \term{Subset (flagged by the matcher)} & \term{Count} & \term{Success@10px} & \term{Median error}\\
 \midrule
 Unique correlation peak      & $92$  & $\mathbf{97.8\%}$ & $0.83$ px\\
-Competing (ambiguous) peaks  & $108$ & $56.5\%$          & $1.41$ px\\
+Competing (ambiguous) peaks  & $108$ & $25.9\%$          & $73.93$ px\\
 \bottomrule
 \end{tabular}
 \end{center}
 
-This second table is the heart of the submission. The overall $\sim\!75\%$
-success rate is not a middling result to be improved by a bigger model --- it
-is the sum of two very different populations: an \emph{easy} population the
-method nails almost perfectly, and a \emph{genuinely ambiguous} population that
-no single-image method can resolve. The matcher tells the two apart on its own.
+This second table is the heart of the submission. The spec-compliant aggregate
+rate includes an easy population the method nails almost perfectly and an
+ambiguous population. Because the external fixture labels arbitrary random crops
+rather than the task's nearest-centre tie convention, the latter is deliberately
+an adverse but honest measure. The matcher identifies this risk on its own.
 
 % ============================ 6. WHY GOOD ENGINEERING ============================
 \section{Why this is a solid engineering solution}
 
 \begin{itemize}[leftmargin=1.4em]
-  \item \term{Right-sized.} The task is solved to one-pixel accuracy by a
+  \item \term{Right-sized.} The resolvable subset is solved to roughly one-pixel accuracy by a
         classical method with two dependencies. We proved, with numbers, that
         added complexity (a verification stage) does not help --- and argued
         from the data why a learned model cannot either.
-  \item \term{Honest about limits.} We identify the $\sim\!25\%$ failures as a
-        fundamental information limit of single-view periodic scenes, and we
-        report it rather than papering over it.
+  \item \term{Honest about limits.} We identify periodic single-view ambiguity
+        as a data-information limit, and separately disclose geometric
+        rotation/distortion as an open, potentially solvable robustness gap.
   \item \term{Self-aware.} The ambiguity flag gives a calibrated confidence
         signal ($98\%$ correct when it claims a unique match), which is
         directly useful in a real inspection workflow.
@@ -414,8 +457,9 @@ no single-image method can resolve. The matcher tells the two apart on its own.
 \vfill
 \begin{center}
 \color{klagrey}\small
-Every claim, metric, and behaviour in this document is implemented in the
-accompanying repository and covered by automated tests.
+The documented executable paths are covered by automated regression tests and
+public CLI smoke runs. The result tables point to their seeded synthetic ledgers
+in the accompanying repository.
 \end{center}
 
 \end{document}

@@ -51,27 +51,34 @@ network access, no GPU.
 
 We measured this rather than assumed it. On a 200-image held-out synthetic set:
 
-| Solver | success@10px | median err | time/sample |
+| Solver / evaluation rule | success@10px | median err | time/sample |
 | --- | --- | --- | --- |
-| NCC (default) | **75.5%** | 1.03 px | 156 ms |
-| NCC + `--verify` | 75.5% | 1.03 px | 470 ms |
+| NCC, **official center tie-break** | **59.0%** | 1.33 px | 209 ms |
+| NCC, raw highest peak (legacy crop-label diagnostic, non-compliant) | 75.5% | 1.03 px | 156 ms |
 
-The successful matches are essentially exact (median ≈ 1 px, sub-pixel). The
-~25% of failures are **appearance-ambiguous periodic arrays**: at the ground-
-truth location the degraded Search content matches the Reference no better than
-at the wrong location the solver picks. A single degraded Search image
-physically does not contain the information to disambiguate these repeats, so
-**this is a fundamental information limit, not a solver deficiency** — a larger
-learned model cannot recover information the input does not carry. The solver
+The official centre tie-break changes only ambiguous cases. The external
+fixture's random-crop labels do not use that official convention, so the
+spec-compliant 59.0% is the honest result to cite for this fixture. The 75.5%
+raw-peak diagnostic is retained only to show the prior convention mismatch.
+The successful unique matches are still essentially exact. The much harder
+remaining cases are **appearance-ambiguous periodic arrays**: at the ground-truth
+location the degraded Search content matches the Reference no better than at a
+wrong repeated location. A single degraded Search image physically does not
+contain the information to disambiguate such repeats, so
+**this is a fundamental information limit, not a solver deficiency**. For the
+inspected ambiguous cases, a larger learned model cannot recover information the
+input does not carry. The solver
 exposes this honestly: it flags such samples as ambiguous.
 
 | Subset (flagged by the solver) | count | success@10px | median err |
 | --- | --- | --- | --- |
 | Unique correlation peak | 92 | **97.8%** | 0.83 px |
-| Competing (ambiguous) peaks | 108 | 56.5% | 1.41 px |
+| Competing (ambiguous) peaks | 108 | 25.9% | 73.93 px |
 
-The ambiguity flag is a real, useful signal: when the solver reports a unique
-peak it is right 98% of the time. See `docs/submission/` for the full analysis.
+The larger ambiguous share under the official tie-break is expected on this
+external fixture because its random crop label is not necessarily the tied region
+nearest the Search center. The ambiguity flag is still a useful signal: when the
+solver reports a unique peak it is right 98% of the time.
 
 ## Installation
 
@@ -103,6 +110,10 @@ for citations):
 python generate_dataset.py --out data/mydata --n 30 --seed 31337
 # noisier search images (robustness stress test):
 python generate_dataset.py --out data/noisy --n 30 --search-speckle 0.6
+# organiser-slide stress controls: charging, scan distortion, rotation, and
+# global feature/polygon scale from -20% to +20%:
+python generate_dataset.py --out data/stress --n 30 --charging-prob 0.2 --charging-intensity 1 \
+  --barrel-k 0.02 --rotation-max-deg 3 --feature-scale-min 0.8 --feature-scale-max 1.2
 ```
 
 It writes `reference/`, `search/`, and a `manifest.csv` (columns
@@ -127,6 +138,11 @@ The key result: the **unique-peak subset stays 100% correct (~0.05 px median)
 at every noise level**. Noise does not corrupt confident matches; it *shrinks*
 the confident subset as fiducials get buried, which the ambiguity flag reports
 honestly.
+
+The added geometric effects are deliberately stress-test controls, not claimed
+as solved deployment robustness. In particular, a rotation-aware NCC search is
+available only through the evaluator's `--angles` study flag because it did not
+improve the SEM-like smoke evaluation and substantially increases runtime.
 
 ## Ambiguous-tile tie-break
 
@@ -154,10 +170,36 @@ change: on a 10-sample RGB set it matched the grayscale quality (success@10px
 
 ```bash
 python evaluate.py --manifest path/to/split/manifest.csv [--verify] [--json-out report.json]
+# The rubric's 1px and 5px positive-pair confusion summaries:
+python evaluate.py --manifest path/to/split/manifest.csv --cm-thresholds 1 5
+# Optional, non-deployment robustness study:
+python evaluate.py --manifest path/to/split/manifest.csv --angles -3 -2 -1 0 1 2 3
 ```
 
 Reports mean / median / p90 / max pixel error, success@{2,5,10,20}px, runtime,
 and the unique-vs-ambiguous breakdown.
+
+Because every manifest row is a positive pair with a known target, a conventional
+four-cell classification confusion matrix has no true-negative or false-positive
+examples. The evaluator reports the meaningful TP/FN outcome counts at each
+spatial tolerance. `analysis/noise_sweep.py` supplies a separate score-threshold
+protocol for a real precision-recall curve:
+
+```bash
+python analysis/noise_sweep.py --out results/noise_sweep --levels 0 0.3 0.6 \
+  --calibration-n 30 --test-n 30 --seed 777
+```
+
+It writes a JSON ledger and a portable SVG plot. On the separate held-out
+30-pair synthetic tests at 5px, precision/recall were 79.2%/82.6% at σ=0.0,
+92.3%/63.2% at σ=0.3, and 27.8%/100% at σ=0.6. Thus confidence thresholding is
+not useful at heavy noise, an explicit limitation rather than a hidden failure.
+
+An experimental SIFT + RANSAC alternative was also measured on the fixed
+40-pair external synthetic test split. It produced 0.0% success@5px and
+success@10px (median 411.31px, 260ms/sample, median zero RANSAC inliers), so it
+is intentionally excluded from the deployment interface. See
+`analysis/feature_baseline.py` and `docs/submission/RUN_REPORT.md`.
 
 ## Verification
 

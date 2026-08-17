@@ -1,0 +1,61 @@
+{
+  "manifest": "C:\\Users\\Administrator\\Projects\\kla-image-restoration\\data\\drift_sense_space\\output\\test_big\\manifest.csv",
+  "verify": false,
+  "center_tiebreak": true,
+  "scales": null,
+  "angles": null,
+  "ms_per_sample": 208.97098779678345,
+  "overall": {
+    "n": 200,
+    "mean_px": 76.95916884266617,
+    "median_px": 1.3287288871401621,
+    "p90_px": 155.4859329423642,
+    "max_px": 955.0638368336594,
+    "success_at_2px": 0.59,
+    "success_at_5px": 0.59,
+    "success_at_10px": 0.59,
+    "success_at_20px": 0.61
+  },
+  "positive_pair_confusion": [
+    {
+      "tolerance_px": 1.0,
+      "true_positive_within_tolerance": 75,
+      "false_negative_outside_tolerance": 125,
+      "true_negative": null,
+      "false_positive": null,
+      "recall_or_success_rate": 0.375,
+      "note": "All manifest rows are positive localization pairs. TN/FP are undefined unless a separate negative-pair protocol is used."
+    },
+    {
+      "tolerance_px": 5.0,
+      "true_positive_within_tolerance": 118,
+      "false_negative_outside_tolerance": 82,
+      "true_negative": null,
+      "false_positive": null,
+      "recall_or_success_rate": 0.59,
+      "note": "All manifest rows are positive localization pairs. TN/FP are undefined unless a separate negative-pair protocol is used."
+    }
+  ],
+  "flagged_unique": {
+    "n": 92,
+    "mean_px": 1.2447041140556159,
+    "median_px": 0.8281066155386385,
+    "p90_px": 1.393441312457267,
+    "max_px": 19.63320025391486,
+    "success_at_2px": 0.9782608695652174,
+    "success_at_5px": 0.9782608695652174,
+    "success_at_10px": 0.9782608695652174,
+    "success_at_20px": 1.0
+  },
+  "flagged_ambiguous": {
+    "n": 108,
+    "mean_px": 141.4566758337048,
+    "median_px": 73.92561709991946,
+    "p90_px": 469.98901457416866,
+    "max_px": 955.0638368336594,
+    "success_at_2px": 0.25925925925925924,
+    "success_at_5px": 0.25925925925925924,
+    "success_at_10px": 0.25925925925925924,
+    "success_at_20px": 0.2777777777777778
+  }
+}

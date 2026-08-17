@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="600" viewBox="0 0 840 600">
+<rect width="100%" height="100%" fill="white"/>
+<style>text{font-family:Arial,sans-serif;fill:#17212b}.small{font-size:13px}.axis{stroke:#283746;stroke-width:1.5}.grid{stroke:#d8dee4;stroke-width:1}</style>
+<text x="105" y="32" font-size="21" font-weight="700">Precision--Recall vs. injected Search speckle</text>
+<text x="105" y="52" class="small">Synthetic held-out sets. Confidence = NCC peak score. Tolerance shown in report.</text>
+<line class="axis" x1="105" y1="485" x2="755" y2="485"/>
+<line class="axis" x1="105" y1="65" x2="105" y2="485"/>
+<line class="grid" x1="105.0" y1="65" x2="105.0" y2="485"/>
+<line class="grid" x1="105" y1="485.0" x2="755" y2="485.0"/>
+<text class="small" x="96.0" y="508">0.0</text>
+<text class="small" x="70" y="489.0">0.0</text>
+<line class="grid" x1="235.0" y1="65" x2="235.0" y2="485"/>
+<line class="grid" x1="105" y1="401.0" x2="755" y2="401.0"/>
+<text class="small" x="226.0" y="508">0.2</text>
+<text class="small" x="70" y="405.0">0.2</text>
+<line class="grid" x1="365.0" y1="65" x2="365.0" y2="485"/>
+<line class="grid" x1="105" y1="317.0" x2="755" y2="317.0"/>
+<text class="small" x="356.0" y="508">0.4</text>
+<text class="small" x="70" y="321.0">0.4</text>
+<line class="grid" x1="495.0" y1="65" x2="495.0" y2="485"/>
+<line class="grid" x1="105" y1="233.0" x2="755" y2="233.0"/>
+<text class="small" x="486.0" y="508">0.6</text>
+<text class="small" x="70" y="237.0">0.6</text>
+<line class="grid" x1="625.0" y1="65" x2="625.0" y2="485"/>
+<line class="grid" x1="105" y1="149.0" x2="755" y2="149.0"/>
+<text class="small" x="616.0" y="508">0.8</text>
+<text class="small" x="70" y="153.0">0.8</text>
+<line class="grid" x1="755.0" y1="65" x2="755.0" y2="485"/>
+<line class="grid" x1="105" y1="65.0" x2="755" y2="65.0"/>
+<text class="small" x="746.0" y="508">1.0</text>
+<text class="small" x="70" y="69.0">1.0</text>
+<text x="398.0" y="538" font-size="15">Recall</text>
+<text transform="translate(28 307.0) rotate(-90)" font-size="15">Precision</text>
+<polyline fill="none" stroke="#147d9b" stroke-width="2.5" points="755.0,149.0 755.0,149.0 727.9,151.9 727.9,140.0 700.8,142.8 673.8,145.8 673.8,132.2 646.7,135.0 619.6,138.0 592.5,141.4 592.5,125.0 565.4,128.0 565.4,109.2 538.3,111.7 511.2,114.4 484.2,117.5 484.2,93.0 457.1,95.0 457.1,65.0 430.0,65.0 402.9,65.0 375.8,65.0 348.8,65.0 321.7,65.0 294.6,65.0 267.5,65.0 240.4,65.0 213.3,65.0 186.2,65.0 159.2,65.0 132.1,65.0 105.0,65.0"/>
+<circle cx="642.0" cy="152.5" r="5" fill="#147d9b"/>
+<line x1="565" y1="100" x2="585" y2="100" stroke="#147d9b" stroke-width="3"/>
+<text class="small" x="592" y="105">speckle σ=0</text>
+<polyline fill="none" stroke="#f0ad2c" stroke-width="2.5" points="755.0,247.0 755.0,247.0 755.0,238.8 716.8,245.0 716.8,236.1 716.8,226.5 716.8,216.2 716.8,205.0 716.8,192.8 716.8,179.5 716.8,165.0 678.5,170.0 678.5,153.4 678.5,135.0 678.5,114.4 640.3,117.5 602.1,121.0 563.8,125.0 563.8,97.3 525.6,100.0 525.6,65.0 487.4,65.0 449.1,65.0 410.9,65.0 372.6,65.0 334.4,65.0 296.2,65.0 257.9,65.0 219.7,65.0 181.5,65.0 143.2,65.0 105.0,65.0"/>
+<circle cx="515.5" cy="97.3" r="5" fill="#f0ad2c"/>
+<line x1="565" y1="125" x2="585" y2="125" stroke="#f0ad2c" stroke-width="3"/>
+<text class="small" x="592" y="130">speckle σ=0.3</text>
+<polyline fill="none" stroke="#4f8126" stroke-width="2.5" points="755.0,247.0 755.0,247.0 755.0,238.8 755.0,230.0 755.0,220.6 755.0,210.4 755.0,199.4 716.8,205.0 716.8,192.8 716.8,179.5 716.8,165.0 678.5,170.0 678.5,153.4 640.3,158.3 640.3,139.1 602.1,143.8 602.1,121.0 563.8,125.0 563.8,97.3 563.8,65.0 525.6,65.0 487.4,65.0 449.1,65.0 410.9,65.0 372.6,65.0 334.4,65.0 296.2,65.0 257.9,65.0 219.7,65.0 181.5,65.0 143.2,65.0 105.0,65.0"/>
+<circle cx="755.0" cy="368.3" r="5" fill="#4f8126"/>
+<line x1="565" y1="150" x2="585" y2="150" stroke="#4f8126" stroke-width="3"/>
+<text class="small" x="592" y="155">speckle σ=0.6</text>
+</svg>

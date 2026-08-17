@@ -1,0 +1,12 @@
+{
+  "synthetic": true,
+  "method": "SIFT + BF ratio match + RANSAC homography",
+  "n": 40,
+  "median_px": 411.30657605250303,
+  "mean_px": 393.31782200652435,
+  "success_at_5px": 0.0,
+  "success_at_10px": 0.0,
+  "ms_per_sample": 260.01101750007365,
+  "median_inliers": 0.0,
+  "median_inlier_ratio": 0.0
+}
