@@ -2,7 +2,7 @@
 
 A deterministic, submission-oriented baseline for the **KLA SEMICON India Hackathon 2026** restoration task.
 
-> **Status on 2026-08-16:** the repository contains a tested residual U-Net baseline and one measured synthetic-data Colab run. The official paired KLA training images are not present in this workspace. Therefore, no result in this repository is represented as an official benchmark score and no final competition checkpoint is claimed.
+> **Status on 2026-08-17:** the repository contains a recovered and regression-tested residual U-Net baseline, a first-party source-disjoint synthetic corpus generator, and historical synthetic Colab evidence. Official paired KLA images are not present. Therefore, no repository result is represented as an official benchmark score or hidden-test performance.
 
 ## Method
 
@@ -54,6 +54,20 @@ Pass the official paired directories directly. Files are found recursively and p
 
 GT is dtype-normalized and clipped to `[0, 1]`. NoisyLR has the same dtype-normalization but is deliberately left unclipped. Images may be grayscale or RGB. Training/validation/test splitting happens by source stem before synthetic views are generated.
 
+## First-party synthetic corpus
+
+When official paired training data is unavailable, create only the disclosed first-party corpus below. The clean-source generator contains no third-party images. The materializer source-splits by clean-image SHA-256 before it produces any crop or degraded view, applies only Gaussian, speckle and downsampling, cycles all six operation orders and retains unclipped NoisyLR arrays as `float32 .npy`.
+
+```bash
+python scripts/generate_clean_sem_sources.py \
+  --out data/restoration_sources --count 96 --size 768 --seed 20260817
+python scripts/materialize_restoration_data.py \
+  --source-dir data/restoration_sources --out data/kla_restoration \
+  --seed 20260817 --views-per-source 6 --crop-size 512 --scale 2
+```
+
+Read `docs/DATA_CARD.md` before interpreting any metric. This corpus validates the public pipeline only. It is not official KLA data.
+
 ## Train
 
 First inspect the pairing report and a small overfit run. Then run the fixed baseline recipe:
@@ -94,7 +108,7 @@ python inference.py \
   --scale 2
 ```
 
-The two directory arguments are mandatory. Files retain their input stems and are saved as PNG by default. Target size is resolved in this strict order:
+The two directory arguments are mandatory. By default, every output preserves its input-relative filename and extension, and pre-existing outputs fail before model execution unless `--overwrite` is explicit. Target size is resolved in this strict order:
 
 1. `--target-size H W`
 2. `--size-map file.csv|json`
@@ -130,4 +144,4 @@ Any Kaggle or other external dataset must be entered in that document before use
 - Gaussian/speckle levels, downsample factors and kernels are initial priors until calibrated from official pairs. They are isolated in YAML.
 - The `--scale 2` default is an explicit assumption, not an assertion about the hidden test set.
 - Dense structures destroyed by downsampling cannot be deterministically recovered. Error maps must be reported rather than presenting hallucinated detail as fact.
-- The provided model weight must be regenerated from official data before it is a credible final submission model.
+- A final checkpoint trained only on synthetic sources remains evidence of a reproducible pipeline, not a credible claim of official KLA hidden-test performance. Retrain or validate only on data that the organizers permit before making a performance claim.

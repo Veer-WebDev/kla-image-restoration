@@ -5,8 +5,10 @@ Contract
 --------
     python inference.py --input_dir <NoisyLR dir> --output_dir <restored dir>
 
-Every image in ``--input_dir`` produces one restored image of the same base name in
-``--output_dir``. The evaluator runs this file unmodified.
+Every image in ``--input_dir`` produces one restored image with its original
+relative filename and extension under ``--output_dir``. Existing outputs and
+name collisions fail before inference unless ``--overwrite`` is supplied. The
+evaluator runs this file unmodified.
 
 Dependencies: torch, numpy, Pillow. Nothing else. No LPIPS, no scikit-image, no
 network access, no pandas. If CUDA is unavailable it runs on CPU automatically.
@@ -128,6 +130,28 @@ def resolve_target_size(
     return (input_hw[0] * scale, input_hw[1] * scale), f"scale x{scale}"
 
 
+def output_path_for(
+    input_path: Path,
+    input_dir: Path,
+    output_dir: Path,
+    *,
+    suffix: str = "",
+    out_ext: str | None = None,
+) -> Path:
+    """Resolve one output path without silently changing evaluator-visible names.
+
+    By default, the path relative to ``input_dir`` and its extension are both
+    preserved. ``--suffix`` and ``--out-ext`` are explicit opt-ins for local
+    experiments, never implicit behavior of the KLA submission command.
+    """
+    relative = input_path.relative_to(input_dir)
+    extension = out_ext or relative.suffix
+    if extension and not extension.startswith("."):
+        extension = f".{extension}"
+    name = f"{relative.stem}{suffix}{extension}"
+    return output_dir / relative.with_name(name)
+
+
 @torch.inference_mode()
 def restore_tensor(
     model: torch.nn.Module,
@@ -213,8 +237,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tile-size", type=int, default=0, help="tile large inputs; 0 disables")
     parser.add_argument("--tile-overlap", type=int, default=32, help="tile overlap in pixels")
     parser.add_argument("--bit-depth", type=int, default=None, choices=(8, 16), help="output bit depth")
-    parser.add_argument("--out-ext", default=".png", help="output file extension")
-    parser.add_argument("--suffix", default="", help="string appended to each output stem")
+    parser.add_argument(
+        "--out-ext",
+        default=None,
+        help="output extension; default preserves each input extension",
+    )
+    parser.add_argument("--suffix", default="", help="explicit string appended to each output stem")
     parser.add_argument("--overwrite", action="store_true", help="overwrite existing outputs")
     parser.add_argument("--log-level", default="INFO", help="logging level")
     parser.add_argument("--log-file", default=None, help="also write logs to this file")
@@ -247,6 +275,24 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     output_dir.mkdir(parents=True, exist_ok=True)
+    planned_outputs: dict[Path, Path] = {}
+    seen_outputs: dict[Path, Path] = {}
+    for path in paths:
+        out_path = output_path_for(
+            path,
+            input_dir,
+            output_dir,
+            suffix=args.suffix,
+            out_ext=args.out_ext,
+        )
+        if out_path in seen_outputs:
+            LOGGER.error("output name collision: %s and %s both map to %s", seen_outputs[out_path], path, out_path)
+            return 2
+        if out_path.exists() and not args.overwrite:
+            LOGGER.error("output already exists (pass --overwrite to replace it): %s", out_path)
+            return 2
+        seen_outputs[out_path] = path
+        planned_outputs[path] = out_path
 
     try:
         checkpoint_path = find_checkpoint(args.checkpoint)
@@ -320,15 +366,14 @@ def main(argv: list[str] | None = None) -> int:
                 torch.cuda.synchronize(device)
             elapsed_ms = (time.perf_counter() - image_started) * 1000.0
 
-            out_path = output_dir / f"{path.stem}{args.suffix}{args.out_ext}"
-            if out_path.exists() and not args.overwrite:
-                LOGGER.warning("output exists, overwriting: %s", out_path.name)
+            out_path = planned_outputs[path]
+            out_path.parent.mkdir(parents=True, exist_ok=True)
             save_image_float(out_path, to_numpy(restored[0].float().cpu()), bit_depth=bit_depth)
 
             records.append(
                 {
-                    "input": path.name,
-                    "output": out_path.name,
+                    "input": path.relative_to(input_dir).as_posix(),
+                    "output": out_path.relative_to(output_dir).as_posix(),
                     "input_size": [int(array.shape[0]), int(array.shape[1])],
                     "output_size": [int(size[0]), int(size[1])],
                     "size_reason": reason,
