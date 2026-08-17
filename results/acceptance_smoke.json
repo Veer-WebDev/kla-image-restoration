@@ -1,0 +1,51 @@
+{
+  "manifest": "C:\\Users\\Administrator\\Projects\\kla-image-restoration\\data\\_acceptance_smoke\\manifest.csv",
+  "verify": false,
+  "center_tiebreak": true,
+  "scales": null,
+  "angles": null,
+  "ms_per_sample": 195.08767127990723,
+  "overall": {
+    "n": 1,
+    "mean_px": 459.0098087170393,
+    "median_px": 459.0098087170393,
+    "p90_px": 459.0098087170393,
+    "max_px": 459.0098087170393,
+    "success_at_2px": 0.0,
+    "success_at_5px": 0.0,
+    "success_at_10px": 0.0,
+    "success_at_20px": 0.0
+  },
+  "positive_pair_confusion": [
+    {
+      "tolerance_px": 1.0,
+      "true_positive_within_tolerance": 0,
+      "false_negative_outside_tolerance": 1,
+      "true_negative": null,
+      "false_positive": null,
+      "recall_or_success_rate": 0.0,
+      "note": "All manifest rows are positive localization pairs. TN/FP are undefined unless a separate negative-pair protocol is used."
+    },
+    {
+      "tolerance_px": 5.0,
+      "true_positive_within_tolerance": 0,
+      "false_negative_outside_tolerance": 1,
+      "true_negative": null,
+      "false_positive": null,
+      "recall_or_success_rate": 0.0,
+      "note": "All manifest rows are positive localization pairs. TN/FP are undefined unless a separate negative-pair protocol is used."
+    }
+  ],
+  "flagged_unique": null,
+  "flagged_ambiguous": {
+    "n": 1,
+    "mean_px": 459.0098087170393,
+    "median_px": 459.0098087170393,
+    "p90_px": 459.0098087170393,
+    "max_px": 459.0098087170393,
+    "success_at_2px": 0.0,
+    "success_at_5px": 0.0,
+    "success_at_10px": 0.0,
+    "success_at_20px": 0.0
+  }
+}
