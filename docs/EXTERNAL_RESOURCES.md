@@ -1,55 +1,36 @@
 # External Resources and Data Provenance
 
-This is the authoritative disclosure log for external code, data and weights
-used in this repository.
+The official KLA problem statement permits public external data and pretrained weights only when their licences allow competition use and all sources are disclosed. This is the authoritative disclosure log for this repository.
 
-## Runtime dependencies
+## Used by the current baseline
 
 | Resource | Role | Licence / source | Status |
 |---|---|---|---|
-| NumPy | Array math | BSD. https://numpy.org/ | Used, declared in `requirements.txt`. |
-| OpenCV (opencv-python-headless) | Image IO, `matchTemplate`, resize | Apache-2.0. https://opencv.org/ | Used, declared in `requirements.txt`. |
+| PyTorch / torchvision | Training and inference framework | BSD-style licence. https://pytorch.org/ | Used, declared in `requirements.txt`. |
+| LPIPS (AlexNet metric weights) | Evaluation metric only | LPIPS package, loaded lazily. https://github.com/richzhang/PerceptualSimilarity | Used only in recorded evaluation where weights were available. Never imported by inference. |
+| `scripts/make_fixtures.py` output | Local deterministic pipeline fixture and synthetic sanity data | Repository source | Used for tests and the committed synthetic Colab run. It is not KLA data. |
 
-The solver has no deep-learning dependency and requires no network access or
-GPU at inference time.
-
-## Our own synthetic data generator
-
-`src/drift_localize/generator.py` is a **self-contained reimplementation** that
-produces DRAM- and FinFET-style Reference/Search pairs with ground-truth centres.
-It is built only from publicly known structural characteristics and standard SEM
-imaging models. No proprietary fab data and no code from any external Space are
-used. Noise/imaging choices and their public sources:
-
-| Effect | Model | Public source |
-|---|---|---|
-| Edge brightening | Add gradient magnitude at feature sidewalls | Reimer, *Scanning Electron Microscopy* (Springer, 2nd ed.), SE contrast chapter |
-| Shot noise (dose) | Poisson counts scaled by dose | Janesick, *Photon Transfer* (SPIE, 2007) |
-| Detector/readout noise | Additive Gaussian, independent per capture | Janesick, *Photon Transfer* (SPIE, 2007) |
-| Speckle (robustness) | Multiplicative `img*(1+N(0,σ))` | Goodman, *Speckle Phenomena in Optics* (2007) |
-| DRAM / FinFET layout | Word/bit lines + contacts; fins + gates | [IRDS 2024 More Moore](https://irds.ieee.org/images/files/pdf/2024/2024IRDS_MM.pdf); [IBM, *Opportunities and challenges of FinFET...*](https://research.ibm.com/publications/opportunities-and-challenges-of-finfet-as-a-device-structure-candidate-for-14nm-node-cmos-technology); [EE Times, *Hynix DRAM layout*](https://www.eetimes.com/hynix-dram-layout-process-integration-adapt-to-change/) |
-
-These are the citations to expand in the final presentation (the task requires
-2–3 credible public sources per augmentation/noise choice).
-
-## Drift-Sense synthetic data generator (external, reference only)
+## Supplied Hugging Face link: not approved for training
 
 - **Name:** Drift-Sense Synthetic Dataset Generator
 - **URL:** https://huggingface.co/spaces/aayushraina21/drift-sense-synthetic-data
-- **Purpose:** generates synthetic Reference/Search image pairs with ground-truth
-  centre coordinates for the Applied Materials Drift-Sense localization task,
-  which is exactly the task this repository solves.
-- **How it is used here:** run **locally** to produce seeded splits used only to
-  *measure* the solver (the `test_big` numbers). The generator code is **not
-  vendored or redistributed**. Our own submission uses the independent generator
-  above; this Space is a measurement fixture only.
-- **Licence caution:** at the inspected revision the Space exposed no explicit
-  `LICENSE` file. Because our solver and our generator are clean, independent
-  implementations containing **no code copied** from the Space, its licensing
-  status does not encumber this repository.
+- **Revision inspected:** `17a728af3ed6a3ccd44f1d3bab95c525efab847a`, inspected 2026-08-16.
+- **Purpose described by source:** synthetic Reference/Search pairs for the separate Applied Materials Drift-Sense problem. The README describes 1000×1000 reference/search imagery, not KLA NoisyLR-to-GT restoration pairs.
+- **Licence:** no `LICENSE` file or explicit licence declaration was exposed in the Space file manifest or README at the inspected revision.
+- **Current decision:** **not downloaded, not used for training, not included in any metric or checkpoint.**
 
-## Honesty notes
+This avoids two unjustified claims: that the resource is legally usable for competition, and that its Reference/Search target is compatible with the KLA restoration target. It may be reconsidered only after the author provides a suitable licence and a controlled experiment shows a benefit without weakening KLA-data validation.
 
-- All committed metrics are from **synthetic** Drift-Sense data and are labelled
-  synthetic. No metric is claimed as an official KLA/AMAT leaderboard result.
-- No parameter is tuned against hidden test data. Splits are seeded and disjoint.
+## Admission checklist for Kaggle or other datasets
+
+Before an external source enters training, add a row with:
+
+1. dataset/model name and immutable URL or revision;
+2. licence and confirmation it allows hackathon/competition use;
+3. dataset/model card and any attribution requirement;
+4. image modality and why it is relevant to semiconductor restoration;
+5. exact preprocessing and whether it is pretraining, synthetic GT source or validation-only;
+6. source-level split policy proving no overlap with KLA validation/test;
+7. a registered experiment ID in `results/experiments.csv`.
+
+No Kaggle dataset is currently admitted because none has been supplied with a licence and dataset card. This is intentional, not a missing benchmark result.
