@@ -190,6 +190,14 @@ were tied for best}. If only one position stands out, it labels the result
 \emph{ambiguous}. This flag turns out to be a remarkably reliable confidence
 signal (Section~\ref{sec:results}).
 
+\subsection{Choosing among tied tiles (the official rule)}
+The task specifies what to do when several tiles match equally well: report the
+one whose centre is \term{closest to the centre of the Search image}. The
+matcher follows this rule by default. When exactly one peak stands out it simply
+returns that peak; when several tie, it returns the tie nearest the frame
+centre. (We expose a switch to fall back to ``just take the strongest peak'' for
+comparison, but the centre rule is the spec-compliant default.)
+
 \subsection{An optional verification stage (off by default)}
 We also implemented a heavier second pass: take the handful of top candidate
 positions, cut out each one from the Search image, blow it back up to the full
@@ -258,6 +266,79 @@ it reports a unique peak it is right about $98\%$ of the time. In a real
 inspection pipeline this is exactly what an operator wants --- a localization
 \emph{plus} a trustworthy ``I am confident'' / ``this region is ambiguous,
 capture another view'' verdict.
+
+% ============================ 4b. DATA GENERATOR ============================
+\section{Making our own data: the synthetic generator}
+\label{sec:generator}
+
+The task rules are explicit: no dataset is provided, and each team must
+\term{generate its own} reference/search pairs from publicly known structure,
+never proprietary fab data. So the submission includes a small, self-contained
+generator (about two hundred lines, NumPy and OpenCV only).
+
+\subsection{What it draws}
+It builds a large ``fine canvas'' at the reference resolution ($1$ nm/px), then
+cuts a random $1000\times1000$ window as the Reference and shrinks the whole
+canvas by $10\times$ to make the Search --- so the Reference genuinely appears,
+shrunk by exactly ten, somewhere inside the Search, with the ground-truth centre
+falling straight out of the crop location. Two die styles are supported (either
+is judged equally):
+\begin{itemize}[leftmargin=1.4em]
+  \item \term{DRAM-style}: periodic horizontal word lines and vertical bit lines
+        crossing at right angles, with a contact dot at a checkerboard of
+        intersections.
+  \item \term{FinFET-style}: dense parallel fin lines crossed by one or two
+        horizontal gate bars.
+\end{itemize}
+
+\subsection{Why it needs landmarks (a lesson we learned by measuring)}
+Our first generator drew a single endless periodic array. When we tested the
+matcher on it, it scored near \emph{zero} --- and correctly so: with no unique
+feature anywhere, every window truly is ambiguous. Real dies are not like that:
+arrays are broken into blocks separated by peripheral material, and wafers carry
+sparse alignment marks. We added both --- irregularly spaced separating strips
+and a random ``constellation'' of alignment fiducials --- and success rose to
+the $80\%$ range, with the confident subset localized perfectly. This is itself
+the central finding in miniature: \term{localizability comes from unique
+landmarks}, and where they are absent, no method can succeed.
+
+\subsection{Every noise choice is justified by public literature}
+The imaging model is deliberately physical, and each effect is tied to a public
+source (full citations in the repository's resource log):
+\begin{itemize}[leftmargin=1.4em]
+  \item \term{Edge brightening}: real SEM images show brighter contrast at
+        feature edges (secondary-electron edge effect).
+  \item \term{Shot noise}: image intensity is an electron count, so noise grows
+        with signal; controlled by an exposure ``dose''.
+  \item \term{Detector/readout noise}: independent additive noise, applied
+        \emph{separately} to the two captures (they are separate acquisitions).
+  \item \term{Speckle}: optional multiplicative noise used to make the Search
+        image noisier for the robustness test below.
+\end{itemize}
+
+\subsection{Robustness: what heavier Search noise does}
+The organisers say to assume the wide-search image is noisier in the real test
+set. We measured exactly that, sweeping the speckle level on $30$ freshly
+generated samples each:
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+\term{Search speckle} & \term{Success@5px} & \term{Confident subset} & \term{Ambiguous subset}\\
+\midrule
+none ($\sigma=0.0$)   & $86.7\%$ & $22/30$ at $100\%$ & $8/30$ at $50\%$\\
+moderate ($\sigma=0.3$) & $60.0\%$ & $14/30$ at $100\%$ & $16/30$ at $31\%$\\
+heavy ($\sigma=0.6$)  & $36.7\%$ & $5/30$ at $100\%$ & $25/30$ at $24\%$\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The important column is the \term{confident subset}: it stays at
+\emph{$100\%$ correct} no matter how heavy the noise. Noise does not turn good
+answers into wrong ones; it \emph{shrinks the set of cases the matcher is sure
+about} (fiducials get buried), and the ambiguity flag reports that honestly.
+That is exactly the behaviour a real inspection tool wants under degraded
+imaging.
 
 % ============================ 5. RESULTS ============================
 \section{Measured results (synthetic data)}
