@@ -191,9 +191,58 @@ def _edge_brighten(img: np.ndarray, strength: float = 0.6) -> np.ndarray:
     return img.astype(np.float32) + strength * mag
 
 
+def _charging_streaks(f: np.ndarray, rng: np.random.Generator, *,
+                      prob_per_100_rows: float, intensity: float) -> np.ndarray:
+    """SEM charging artefact: bright horizontal streaks where accumulated
+    surface charge deflects the beam. Modelled as occasional partial rows with
+    an additive brightness boost. (Reimer, SEM; charging contrast.)"""
+    if prob_per_100_rows <= 0:
+        return f
+    h, w = f.shape
+    n = rng.poisson(prob_per_100_rows * h / 100.0)
+    for _ in range(int(n)):
+        y = int(rng.integers(0, h))
+        x0 = int(rng.integers(0, w))
+        length = int(rng.integers(w // 8, w))
+        boost = intensity * rng.uniform(20, 60)
+        f[y, x0:x0 + length] += boost
+    return f
+
+
+def _barrel_distortion(img: np.ndarray, k: float) -> np.ndarray:
+    """Barrel(+)/pincushion(-) geometric distortion. Remaps pixels radially by
+    (1 + k r^2); small k mimics SEM scan-field non-linearity."""
+    if abs(k) < 1e-6:
+        return img
+    h, w = img.shape[:2]
+    cx, cy = w / 2.0, h / 2.0
+    ys, xs = np.indices((h, w), dtype=np.float32)
+    nx = (xs - cx) / cx
+    ny = (ys - cy) / cy
+    r2 = nx * nx + ny * ny
+    factor = 1.0 + k * r2
+    map_x = (cx + nx * factor * cx).astype(np.float32)
+    map_y = (cy + ny * factor * cy).astype(np.float32)
+    return cv2.remap(img, map_x, map_y, interpolation=cv2.INTER_LINEAR,
+                     borderMode=cv2.BORDER_REFLECT)
+
+
+def _rotate_small(img: np.ndarray, deg: float) -> np.ndarray:
+    """Small in-plane rotation (1-3 deg): stage/scan misalignment."""
+    if abs(deg) < 1e-6:
+        return img
+    h, w = img.shape[:2]
+    M = cv2.getRotationMatrix2D((w / 2.0, h / 2.0), deg, 1.0)
+    return cv2.warpAffine(img, M, (w, h), flags=cv2.INTER_LINEAR,
+                          borderMode=cv2.BORDER_REFLECT)
+
+
 def _apply_sem_noise(img: np.ndarray, rng: np.random.Generator, *,
                      dose: float, readout_sigma: float, speckle_sigma: float,
-                     edge_strength: float) -> np.ndarray:
+                     edge_strength: float,
+                     charging_prob: float = 0.0, charging_intensity: float = 0.0,
+                     barrel_k: float = 0.0, rotation_deg: float = 0.0
+                     ) -> np.ndarray:
     """Turn a clean structure image into a realistic SEM capture.
 
     dose            : higher = less shot noise (Poisson mean scales with dose)
@@ -201,6 +250,9 @@ def _apply_sem_noise(img: np.ndarray, rng: np.random.Generator, *,
                       per capture)
     speckle_sigma   : multiplicative coherent noise (0 = off)
     edge_strength   : SE edge-brightening amount
+    charging_*      : bright charging streaks (prob per 100 rows; intensity)
+    barrel_k        : geometric barrel/pincushion distortion strength
+    rotation_deg    : small whole-image rotation in degrees
     """
     f = _edge_brighten(img, edge_strength)
     f = np.clip(f, 0, 255)
@@ -211,7 +263,13 @@ def _apply_sem_noise(img: np.ndarray, rng: np.random.Generator, *,
     if speckle_sigma > 0:
         f = f * (1.0 + rng.normal(0, speckle_sigma, size=f.shape))
     f = f + rng.normal(0, readout_sigma, size=f.shape)
-    return np.clip(f, 0, 255).astype(np.uint8)
+    f = _charging_streaks(f, rng, prob_per_100_rows=charging_prob,
+                          intensity=charging_intensity)
+    f = np.clip(f, 0, 255).astype(np.uint8)
+    # Geometric effects last, on the final grayscale capture.
+    f = _barrel_distortion(f, barrel_k)
+    f = _rotate_small(f, rotation_deg)
+    return f
 
 
 def image_reference(crop: np.ndarray, rng: np.random.Generator, *,
@@ -224,7 +282,9 @@ def image_reference(crop: np.ndarray, rng: np.random.Generator, *,
 
 def image_search(fine_canvas: np.ndarray, rng: np.random.Generator, *,
                  dose: float = 200.0, readout_sigma: float = 5.0,
-                 speckle_sigma: float = 0.0, edge_strength: float = 0.6
+                 speckle_sigma: float = 0.0, edge_strength: float = 0.6,
+                 charging_prob: float = 0.0, charging_intensity: float = 0.0,
+                 barrel_k: float = 0.0, rotation_deg: float = 0.0
                  ) -> np.ndarray:
     """Low-dose, noisier wide-search capture: downsample the fine canvas by
     10x (10 nm/px) then apply independent SEM noise."""
@@ -232,7 +292,10 @@ def image_search(fine_canvas: np.ndarray, rng: np.random.Generator, *,
                        interpolation=cv2.INTER_AREA)
     return _apply_sem_noise(small, rng, dose=dose, readout_sigma=readout_sigma,
                             speckle_sigma=speckle_sigma,
-                            edge_strength=edge_strength)
+                            edge_strength=edge_strength,
+                            charging_prob=charging_prob,
+                            charging_intensity=charging_intensity,
+                            barrel_k=barrel_k, rotation_deg=rotation_deg)
 
 
 # --------------------------------------------------------------------------
@@ -262,7 +325,9 @@ def _to_optical_rgb(gray: np.ndarray, rng: np.random.Generator) -> np.ndarray:
 def generate_sample(architecture: str, rng: np.random.Generator, *,
                     search_speckle_sigma: float = 0.0,
                     search_readout_sigma: float = 5.0,
-                    zoned: bool = True, rgb: bool = False) -> dict:
+                    zoned: bool = True, rgb: bool = False,
+                    charging_prob: float = 0.0, charging_intensity: float = 0.0,
+                    barrel_k: float = 0.0, rotation_max_deg: float = 0.0) -> dict:
     """Generate one reference/search pair with ground-truth center.
 
     Returns a dict with reference_img, search_img (both uint8 1000x1000),
@@ -271,6 +336,12 @@ def generate_sample(architecture: str, rng: np.random.Generator, *,
     ``zoned`` (default True) composes the canvas from array mats separated by
     peripheral strips so most crops contain a unique landmark. Set False for a
     purely periodic canvas (useful to demonstrate the ambiguity ceiling).
+
+    Extra search-image augmentations (all default off) mirror the task slides:
+    ``charging_prob``/``charging_intensity`` (charging streaks), ``barrel_k``
+    (geometric distortion), ``rotation_max_deg`` (a small random rotation, e.g.
+    1-3 deg). These perturb the Search only; the Reference stays clean, which is
+    realistic (reference is a careful high-dose capture).
     """
     if architecture not in _GENERATORS:
         raise ValueError(f"unknown architecture {architecture!r}; "
@@ -286,8 +357,12 @@ def generate_sample(architecture: str, rng: np.random.Generator, *,
     crop = fine[y0:y0 + REFERENCE_SIZE_PX, x0:x0 + REFERENCE_SIZE_PX]
 
     reference_img = image_reference(crop, rng)
+    rot = float(rng.uniform(-rotation_max_deg, rotation_max_deg)) if rotation_max_deg else 0.0
     search_img = image_search(fine, rng, speckle_sigma=search_speckle_sigma,
-                              readout_sigma=search_readout_sigma)
+                              readout_sigma=search_readout_sigma,
+                              charging_prob=charging_prob,
+                              charging_intensity=charging_intensity,
+                              barrel_k=barrel_k, rotation_deg=rot)
 
     if rgb:
         reference_img = _to_optical_rgb(reference_img, rng)

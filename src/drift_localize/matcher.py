@@ -25,6 +25,10 @@ import cv2
 import numpy as np
 
 DEFAULT_SCALES = (9.0, 9.5, 10.0, 10.5, 11.0)
+# Rotation search is opt-in. The task allows a 1-3 degree misalignment between
+# reference and search; enabling a small angle sweep restores accuracy under
+# rotation at the cost of proportionally more correlation passes.
+DEFAULT_ANGLES = (0.0,)
 
 
 @dataclass
@@ -53,6 +57,21 @@ def _parabolic_subpixel(response: np.ndarray, x: int, y: int) -> tuple[float, fl
         if abs(denom) > 1e-12:
             dy = 0.5 * (up - down) / denom
     return float(np.clip(dx, -1, 1)), float(np.clip(dy, -1, 1))
+
+
+def _rotate_template(template: np.ndarray, deg: float):
+    """Rotate a template about its center, returning (rotated, mask). The mask
+    marks the valid (non-corner) pixels so matchTemplate can ignore the zero
+    padding introduced by rotation."""
+    if abs(deg) < 1e-9:
+        return template, None
+    h, w = template.shape
+    M = cv2.getRotationMatrix2D((w / 2.0, h / 2.0), deg, 1.0)
+    rot = cv2.warpAffine(template, M, (w, h), flags=cv2.INTER_LINEAR,
+                         borderValue=0)
+    mask = cv2.warpAffine(np.full((h, w), 255, np.uint8), M, (w, h),
+                          flags=cv2.INTER_NEAREST, borderValue=0)
+    return rot, mask
 
 
 def _iter_peaks(response: np.ndarray, k: int, min_dist: int):
@@ -89,7 +108,8 @@ def _fine_score(reference_f: np.ndarray, search: np.ndarray,
 def predict(reference_path: str, search_path: str, *,
             scales=DEFAULT_SCALES, topk: int = 5, verify: bool = False,
             tie_margin: float = 0.03,
-            center_tiebreak: bool = True) -> LocalizeResult:
+            center_tiebreak: bool = True,
+            angles=DEFAULT_ANGLES) -> LocalizeResult:
     """Localize the Reference field of view inside the Search image.
 
     Parameters
@@ -110,6 +130,10 @@ def predict(reference_path: str, search_path: str, *,
         Default True (spec-compliant). Set False to always take the highest
         correlation peak; on our crop-labeled synthetic GT that scores higher,
         but it does not follow the stated scoring convention.
+    angles : iterable of float
+        Template rotations (degrees) to search. Default (0.0,) = no rotation
+        search (fastest). Pass e.g. (-3,-2,-1,0,1,2,3) to be robust to a small
+        reference/search misalignment, at a proportional runtime cost.
     """
     reference = cv2.imread(reference_path, cv2.IMREAD_GRAYSCALE)
     search = cv2.imread(search_path, cv2.IMREAD_GRAYSCALE)
@@ -119,16 +143,31 @@ def predict(reference_path: str, search_path: str, *,
     Rh, Rw = reference.shape
 
     candidates = []  # (coarse_score, x, y, dx, dy, tw, th, scale)
+    # When searching rotations we must score every angle (including 0) with the
+    # same method, so their scores are comparable. Masked TM_CCORR_NORMED works
+    # with a rotation mask; without rotation we keep the stronger TM_CCOEFF.
+    rotation_search = any(abs(float(a)) > 1e-9 for a in angles)
     for scale in scales:
         tw = max(int(round(Rw / scale)), 1)
         th = max(int(round(Rh / scale)), 1)
         if tw >= search.shape[1] or th >= search.shape[0]:
             continue
         template = cv2.resize(reference, (tw, th), interpolation=cv2.INTER_AREA)
-        response = cv2.matchTemplate(search, template, cv2.TM_CCOEFF_NORMED)
-        for score, x, y in _iter_peaks(response, topk, max(tw, th) // 2):
-            dx, dy = _parabolic_subpixel(response, x, y)
-            candidates.append((float(score), x, y, dx, dy, tw, th, scale))
+        for angle in angles:
+            tmpl, mask = _rotate_template(template, float(angle))
+            if not rotation_search:
+                response = cv2.matchTemplate(search, tmpl, cv2.TM_CCOEFF_NORMED)
+            elif mask is None:
+                full = np.full(tmpl.shape, 255, np.uint8)
+                response = cv2.matchTemplate(search, tmpl, cv2.TM_CCORR_NORMED,
+                                             mask=full)
+            else:
+                response = cv2.matchTemplate(search, tmpl, cv2.TM_CCORR_NORMED,
+                                             mask=mask)
+            response = np.nan_to_num(response, nan=0.0, posinf=0.0, neginf=0.0)
+            for score, x, y in _iter_peaks(response, topk, max(tw, th) // 2):
+                dx, dy = _parabolic_subpixel(response, x, y)
+                candidates.append((float(score), x, y, dx, dy, tw, th, scale))
 
     if not candidates:
         return LocalizeResult(search.shape[1] / 2.0, search.shape[0] / 2.0,
