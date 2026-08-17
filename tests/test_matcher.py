@@ -16,7 +16,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))), "src"))
 
-from drift_localize import predict  # noqa: E402
+from drift_localize import predict, generator  # noqa: E402
 
 
 def _make_pair(tmp_path, search_img, ref_top_left, ref_size_in_search=100,
@@ -83,3 +83,42 @@ def test_periodic_layout_flagged_ambiguous(tmp_path):
 def test_missing_file_raises(tmp_path):
     with pytest.raises(ValueError):
         predict(str(tmp_path / "nope.png"), str(tmp_path / "nope2.png"))
+
+
+def test_center_tiebreak_selects_center_closest(tmp_path):
+    # Two identical tiles equidistant... build a periodic search where several
+    # positions tie, and check center-tiebreak picks the one nearest center.
+    tile = np.zeros((50, 50), np.uint8)
+    tile[10:40, 10:40] = 200
+    search = np.tile(tile, (20, 20))
+    ref_path, srch_path, _, _ = _make_pair(tmp_path, search, (300, 300))
+    on = predict(ref_path, srch_path, center_tiebreak=True)
+    off = predict(ref_path, srch_path, center_tiebreak=False)
+    assert on.ambiguous and off.ambiguous
+    sc = search.shape[1] / 2.0
+    d_on = ((on.x - sc) ** 2 + (on.y - sc) ** 2) ** 0.5
+    d_off = ((off.x - sc) ** 2 + (off.y - sc) ** 2) ** 0.5
+    # Center tie-break should be no farther from center than the raw argmax.
+    assert d_on <= d_off + 1e-6
+
+
+def test_generator_produces_findable_pair(tmp_path):
+    # A zoned canvas with fiducials should yield at least one sample the
+    # matcher localizes to within a few pixels (closed loop: generate->match).
+    ref_p = str(tmp_path / "g_ref.png")
+    srch_p = str(tmp_path / "g_srch.png")
+    best_err = 1e9
+    for seed in range(6):
+        rng = np.random.default_rng(seed)
+        s = generator.generate_sample("finfet", rng)
+        cv2.imwrite(ref_p, s["reference_img"])
+        cv2.imwrite(srch_p, s["search_img"])
+        res = predict(ref_p, srch_p)
+        err = ((res.x - s["gt_x"]) ** 2 + (res.y - s["gt_y"]) ** 2) ** 0.5
+        best_err = min(best_err, err)
+    assert best_err < 5.0, f"no findable sample; best error {best_err:.1f}px"
+
+
+def test_generator_rejects_unknown_architecture():
+    with pytest.raises(ValueError):
+        generator.generate_sample("cpu", np.random.default_rng(0))

@@ -13,5 +13,6 @@ docs/submission for why a heavier learned model is not justified on this task.
 """
 
 from drift_localize.matcher import predict, LocalizeResult
+from drift_localize import generator
 
-__all__ = ["predict", "LocalizeResult"]
+__all__ = ["predict", "LocalizeResult", "generator"]
