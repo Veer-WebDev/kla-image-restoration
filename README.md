@@ -1,5 +1,7 @@
 # KLA Semiconductor Image Restoration
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Veer-WebDev/kla-image-restoration/blob/kla-restoration-submission/notebooks/colab_train.ipynb)
+
 A deterministic, submission-oriented baseline for the **KLA SEMICON India Hackathon 2026** restoration task.
 
 > **Status on 2026-08-17:** the repository contains a recovered and regression-tested residual U-Net baseline, a first-party source-disjoint synthetic corpus generator, and historical synthetic Colab evidence. Official paired KLA images are not present. Therefore, no repository result is represented as an official benchmark score or hidden-test performance.
@@ -131,7 +133,7 @@ Do not tune against the hidden test data. Run ablations one variable at a time a
 
 `notebooks/colab_train.ipynb` is fully automated. It clones this repository (no manual upload), builds a **combined corpus** of the committed real DRAM/FinFET SEM structures (`data/sem_sources/`, curated from the SEMICON India *Drift-Sense* dataset) plus a larger first-party synthetic source set, trains `configs/submission_robust.yaml`, freezes the validation-best weights into `models/best.pth` (the exact file `run.py` loads), evaluates once on held-out sources, runs a robustness check on artifact-laden inputs, exercises the `run.py` `.npy` contract, and downloads the trained artifacts.
 
-1. Open the notebook in Colab.
+1. Open the notebook in Colab: <https://colab.research.google.com/github/Veer-WebDev/kla-image-restoration/blob/kla-restoration-submission/notebooks/colab_train.ipynb> (or click the badge at the top).
 2. `Runtime > Change runtime type > T4 GPU`.
 3. `Runtime > Run all`. No prompts, no cell edits. (Private repo: add a `GITHUB_TOKEN` Colab Secret with `repo` scope.)
 4. The final cell downloads `kla_restoration_robust_artifacts.zip`; drop its `models/best.pth` into this repo at the same path to update the submission.
