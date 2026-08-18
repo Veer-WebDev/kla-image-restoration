@@ -40,6 +40,37 @@ model (~17.5M params) selected on validation PSNR.
 
 ## Training plan (ready to run on Colab)
 
+### One-shot Colab (current, 2026-08-18)
+
+`notebooks/colab_train.ipynb` is now **fully automated** (no manual ZIP upload):
+it clones this repo, installs deps while preserving Colab's CUDA torch, builds
+the corpus, trains, freezes `models/best.pth`, evaluates once, exercises the
+`run.py` `.npy` contract, and downloads the artifact zip. Just open it, pick a
+T4 GPU, and `Runtime > Run all`.
+
+Repository is **private**, so:
+- Colab's GitHub notebook loader (`colab.research.google.com/github/...`) returns
+  "notebook not found" unless Colab is GitHub-authorized. Preferred entry:
+  upload `notebooks/colab_train.ipynb` directly (File > Upload notebook), or make
+  the repo public (the KLA rules require an *accessible* repo anyway).
+- The clone cell reads a Colab Secret `GITHUB_TOKEN` (PAT, `repo` scope). Add it
+  via the key icon and enable notebook access. If the repo is made public, no
+  token is needed and the same cell still works.
+
+Known live blockers on 2026-08-18:
+1. The Chrome profile driving Colab was **signed out of Google** ("Sign in"),
+   so no cell can run until the user signs in.
+2. Repo visibility is private (see above).
+
+BBX orchestration: the `bbx` CLI is at
+`C:\Users\Administrator\AppData\Roaming\npm\bbx.cmd` (add that dir to PATH).
+`bbx status` shows daemon+extension connected; drive Colab with
+`bbx tab-activate <id>`, `bbx navigate <url>`, `bbx page-text`, `bbx dom-query`,
+`bbx click`. Avoid shell `timeout`/`ping` redirection tricks around `bbx
+screenshot` (they break its stdin/artifact transfer).
+
+### Legacy plan (manual upload)
+
 - Config: `configs/submission_big.yaml`
   - Corpus: 160 first-party synthetic clean sources -> 768 train / 96 val /
     96 test paired views, source-disjoint by SHA-256 before view expansion.
