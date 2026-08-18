@@ -127,6 +127,15 @@ Training stores the resolved configuration, source-level split, validation manif
 
 Do not tune against the hidden test data. Run ablations one variable at a time and keep only measured results.
 
+### Reproduce the submission checkpoint on Colab (one-shot)
+
+`notebooks/colab_train.ipynb` is fully automated. It clones this public repository (no manual upload), builds the disclosed synthetic corpus, trains `configs/submission_big.yaml`, freezes the validation-best weights into `models/best.pth` (the exact file `run.py` loads), evaluates once on held-out sources, exercises the `run.py` `.npy` contract, and downloads the trained artifacts.
+
+1. Open the notebook in Colab.
+2. `Runtime > Change runtime type > T4 GPU`.
+3. `Runtime > Run all`. No prompts, no cell edits.
+4. Cell 8 downloads `kla_restoration_big_artifacts.zip`; drop its `models/best.pth` into this repo at the same path to update the submission.
+
 ## Evaluate
 
 ```bash
