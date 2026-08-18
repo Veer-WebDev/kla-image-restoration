@@ -26,6 +26,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 
 from .degradation import DegradationConfig, degrade, sample_seed
+from .extended_degradation import ExtendedDegradationConfig, apply_extended
 from .utils import (
     LoadedImage,
     dataloader_generator,
@@ -274,12 +275,14 @@ class RestorationDataset(Dataset):
         *,
         mode: Literal["synthetic", "official", "mixed"] = "synthetic",
         degradation: DegradationConfig | None = None,
+        extended: ExtendedDegradationConfig | None = None,
         config: DatasetConfig | None = None,
         seed: int = 42,
         on_missing: Literal["error", "synthetic", "skip"] = "error",
     ) -> None:
         self.config = config or DatasetConfig()
         self.degradation = degradation or DegradationConfig()
+        self.extended = extended or ExtendedDegradationConfig()
         self.gt_map = dict(gt_map)
         self.noisy_map = dict(noisy_map or {})
         self.mode = mode
@@ -400,6 +403,14 @@ class RestorationDataset(Dataset):
             noisy, params = degrade(gt, self.degradation, int(seed))
             params_dict = params.to_dict()
             self._counts["synthetic"] += 1
+
+        # Opt-in extended SEM artifacts (robustness augmentation). Applied only in
+        # training mode, on the NoisyLR, and only when the config enables it. This
+        # never touches the KLA-faithful evaluation path.
+        if self.config.training and self.extended.any_active:
+            noisy, extended_params = apply_extended(noisy, self.extended, int(seed))
+            if extended_params:
+                params_dict = {**params_dict, "extended": extended_params}
 
         if self.config.training and self.config.augment:
             code = int(rng.integers(0, 8))

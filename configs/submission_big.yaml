@@ -1,0 +1,76 @@
+# Larger-corpus submission training configuration.
+#
+# Trains the residual U-Net on the 160-source (768/96/96) first-party synthetic
+# corpus. Validation-best checkpoint is the packaging candidate. Test split is
+# reported once after selection and never tunes hyperparameters.
+
+experiment_id: kla_restoration_big_seed20260817
+seed: 20260817
+device: auto
+strict_determinism: true
+
+data:
+  gt_dir: data/kla_big/train/GT
+  noisy_dir: data/kla_big/train/NoisyLR
+  source_manifest: data/kla_big/train_manifest.csv
+  split_ratios: [0.85, 0.15, 0.0]
+  split_seed: 20260817
+  channels: 1
+  autodetect_channels: true
+  patch_size: 256
+  samples_per_image: 4
+  synthetic_prob: 0.0
+  augment: true
+  augment_flips: true
+  augment_rot90: true
+  cache_images: true
+  max_eval_size: 512
+  train_mode: official
+  eval_mode: official
+
+model:
+  name: residual_unet
+  base_channels: 48
+  depth: 4
+  upsample_mode: bicubic
+  clamp_output: false
+  degradation_aware: false
+  condition_dim: 0
+
+loss:
+  kind: charbonnier_ssim
+  charbonnier_epsilon: 0.001
+  ssim_weight: 0.2
+  l1_weight: 0.0
+
+train:
+  epochs: 60
+  batch_size: 16
+  lr: 0.0003
+  weight_decay: 0.00001
+  optimizer: adamw
+  betas: [0.9, 0.999]
+  scheduler: cosine
+  warmup_epochs: 2
+  min_lr_factor: 0.01
+  grad_clip: 1.0
+  amp: true
+  num_workers: 2
+  pin_memory: true
+  eval_every: 1
+  save_every: 1
+  early_stop_patience: 12
+  selection_metric: psnr
+  eval_lpips: false
+
+inference:
+  scale: 2
+  batch_size: 1
+  bit_depth: 8
+  out_ext: .png
+  tile_size: 0
+  tile_overlap: 32
+
+paths:
+  output_dir: runs
+  results_csv: results/experiments.csv

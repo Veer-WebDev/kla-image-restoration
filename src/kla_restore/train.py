@@ -18,6 +18,7 @@ Design points that answer specific audit findings:
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import math
 import platform
@@ -42,6 +43,7 @@ from .dataset import (
     split_keys,
 )
 from .degradation import DegradationConfig, describe_config
+from .extended_degradation import ExtendedDegradationConfig, describe_extended
 from .metrics import LossConfig, aggregate, build_loss, compute_metrics, get_lpips
 from .model import ModelConfig, build_model, model_summary
 from .utils import (
@@ -216,6 +218,7 @@ def load_config(path: str | Path | None, overrides: list[str] | None = None) -> 
         },
         "paths": {"output_dir": "runs", "results_csv": "results/experiments.csv"},
         "degradation": {},
+        "extended_degradation": {},
     }
     if path:
         file_config = load_yaml(path)
@@ -401,11 +404,65 @@ def validate(
 # --------------------------------------------------------------------------------------
 # orchestration
 # --------------------------------------------------------------------------------------
+def split_keys_by_source_manifest(
+    keys: Iterable[str],
+    source_manifest: str | Path,
+    *,
+    ratios: tuple[float, float, float],
+    seed: int,
+) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """Split materialized sample keys by their clean-source SHA-256 group.
+
+    A materialized corpus can contain many crop/degradation views of a single
+    clean source. Splitting its filename keys directly would leak source content
+    from train into validation. The materializer writes ``sample_id`` and
+    ``source_sha256`` explicitly so this function can reject incomplete or
+    ambiguous mappings before the first optimization step.
+    """
+    path = Path(source_manifest)
+    if not path.is_file():
+        raise FileNotFoundError(f"source manifest not found: {path}")
+    available = set(keys)
+    key_to_source: dict[str, str] = {}
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        required = {"sample_id", "source_sha256"}
+        if not reader.fieldnames or not required <= set(reader.fieldnames):
+            raise ValueError(f"source manifest must contain {sorted(required)}: {path}")
+        for row in reader:
+            key = str(row["sample_id"]).strip().lower()
+            source = str(row["source_sha256"]).strip().lower()
+            if not key or not source:
+                raise ValueError(f"blank sample_id or source_sha256 in {path}")
+            if key in key_to_source and key_to_source[key] != source:
+                raise ValueError(f"sample_id maps to multiple sources in {path}: {key}")
+            key_to_source[key] = source
+    missing = sorted(available - set(key_to_source))
+    extra = sorted(set(key_to_source) - available)
+    if missing or extra:
+        raise ValueError(
+            f"source manifest does not exactly match discovered pairs: "
+            f"missing={missing[:5]} extra={extra[:5]}"
+        )
+    source_to_keys: dict[str, list[str]] = {}
+    for key in sorted(available):
+        source_to_keys.setdefault(key_to_source[key], []).append(key)
+    source_splits = split_keys(source_to_keys, ratios=ratios, seed=seed)
+    sample_splits = {
+        split: sorted(key for source in sources for key in source_to_keys[source])
+        for split, sources in source_splits.items()
+    }
+    return sample_splits, source_splits
+
+
 def prepare_data(
-    config: dict[str, Any], degradation: DegradationConfig
+    config: dict[str, Any],
+    degradation: DegradationConfig,
+    extended: ExtendedDegradationConfig | None = None,
 ) -> tuple[RestorationDataset, RestorationDataset, dict[str, Any]]:
     """Discover, split and wrap the data. Fails loudly on an empty or unpaired dataset."""
     data_cfg = config["data"]
+    extended = extended or ExtendedDegradationConfig()
     gt_dir = Path(data_cfg["gt_dir"])
     if not gt_dir.exists():
         raise FileNotFoundError(
@@ -433,17 +490,25 @@ def prepare_data(
     config["model"]["out_channels"] = channels
     data_cfg["channels"] = channels
 
-    splits = split_keys(
-        gt_map.keys(),
-        tuple(float(r) for r in data_cfg["split_ratios"]),
-        int(data_cfg["split_seed"]),
-    )
+    ratios = tuple(float(r) for r in data_cfg["split_ratios"])
+    split_seed = int(data_cfg["split_seed"])
+    source_manifest = data_cfg.get("source_manifest")
+    if source_manifest:
+        splits, source_splits = split_keys_by_source_manifest(
+            gt_map.keys(), source_manifest, ratios=ratios, seed=split_seed
+        )
+        split_unit = "source_sha256_manifest"
+    else:
+        splits = split_keys(gt_map.keys(), ratios, split_seed)
+        source_splits = splits
+        split_unit = "canonical_stem"
     LOGGER.info(
-        "split | train=%d val=%d test=%d (source level, seed=%d)",
+        "split | train=%d val=%d test=%d (%s, seed=%d)",
         len(splits["train"]),
         len(splits["val"]),
         len(splits["test"]),
-        int(data_cfg["split_seed"]),
+        split_unit,
+        split_seed,
     )
     if not splits["train"] or not splits["val"]:
         raise ValueError(
@@ -466,6 +531,7 @@ def prepare_data(
         noisy_map,
         mode=train_mode,  # type: ignore[arg-type]
         degradation=degradation,
+        extended=extended,
         config=DatasetConfig(
             patch_size=int(data_cfg["patch_size"]),
             samples_per_image=int(data_cfg["samples_per_image"]),
@@ -504,6 +570,9 @@ def prepare_data(
         "pairing": report.summary(),
         "splits": {k: len(v) for k, v in splits.items()},
         "split_keys": splits,
+        "source_splits": source_splits,
+        "split_unit": split_unit,
+        "source_manifest": str(source_manifest) if source_manifest else None,
         "train_mode": train_mode,
         "eval_mode": eval_mode,
         "channels": channels,
@@ -529,7 +598,10 @@ def train(config: dict[str, Any], resume: str | Path | None = None) -> dict[str,
     degradation = DegradationConfig.from_dict(config.get("degradation") or {})
     LOGGER.info("degradation | %s", describe_config(degradation))
 
-    train_ds, val_ds, split_info = prepare_data(config, degradation)
+    extended = ExtendedDegradationConfig.from_dict(config.get("extended_degradation") or {})
+    LOGGER.info("degradation | %s", describe_extended(extended))
+
+    train_ds, val_ds, split_info = prepare_data(config, degradation, extended)
     train_cfg = config["train"]
     num_workers = int(train_cfg["num_workers"])
     if device.type == "cpu" and num_workers > 0:

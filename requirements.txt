@@ -1,17 +1,27 @@
-# Runtime dependencies for standalone training and inference.
-# Install a CUDA-compatible PyTorch build separately when running on an NVIDIA GPU.
-torch>=2.1,<2.7
-torchvision>=0.16,<0.22
-numpy>=1.24,<2
-Pillow>=10,<12
-PyYAML>=6,<7
-tqdm>=4.65,<5
+# Runtime dependencies for the KLA restoration submission.
+#
+# The evaluator runs:  python run.py <input-dir> <output-dir>
+# Only torch, numpy and Pillow are required at inference time. Install a
+# CUDA-matched PyTorch wheel on the NVIDIA GPU machine before these, e.g.:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+#
+# Versions verified on the reference environment (CPU wheel shown; use the
+# matching CUDA build on the evaluator):
+torch==2.5.1
+numpy==2.4.6
+Pillow==11.0.0
+PyYAML==6.0.2
+tqdm==4.67.1
 
-# Evaluation-only. inference.py does not import these packages.
-scikit-image>=0.22,<0.25
-lpips>=0.1.4,<0.2
-pandas>=2,<3
-matplotlib>=3.8,<4
+# Evaluation-only extras (metrics, plots). run.py does NOT import these.
+scikit-image==0.24.0
+lpips==0.1.4
+pandas==2.2.3
+matplotlib==3.9.2
 
-# Development and reproducibility verification.
-pytest>=8,<9
+# Training-only: extended SEM acquisition-artifact augmentation
+# (src/kla_restore/extended_degradation.py). run.py does NOT import scipy.
+scipy>=1.10
+
+# Development and reproducibility verification only.
+pytest==8.3.3

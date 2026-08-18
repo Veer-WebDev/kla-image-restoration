@@ -1,0 +1,76 @@
+# Fixed, first-party-synthetic restoration submission configuration.
+#
+# This configuration is versioned before training. The checkpoint selected for
+# packaging must be validation-best only. Any test-split result is reported once
+# after selection and never feeds a hyperparameter decision.
+
+experiment_id: kla_restoration_submission_seed20260817
+seed: 20260817
+device: auto
+strict_determinism: true
+
+data:
+  gt_dir: data/kla_restoration/train/GT
+  noisy_dir: data/kla_restoration/train/NoisyLR
+  source_manifest: data/kla_restoration/train_manifest.csv
+  split_ratios: [0.85, 0.15, 0.0]
+  split_seed: 20260817
+  channels: 1
+  autodetect_channels: true
+  patch_size: 256
+  samples_per_image: 4
+  synthetic_prob: 0.0
+  augment: true
+  augment_flips: true
+  augment_rot90: true
+  cache_images: true
+  max_eval_size: 512
+  train_mode: official
+  eval_mode: official
+
+model:
+  name: residual_unet
+  base_channels: 32
+  depth: 4
+  upsample_mode: bicubic
+  clamp_output: false
+  degradation_aware: false
+  condition_dim: 0
+
+loss:
+  kind: charbonnier_ssim
+  charbonnier_epsilon: 0.001
+  ssim_weight: 0.2
+  l1_weight: 0.0
+
+train:
+  epochs: 40
+  batch_size: 8
+  lr: 0.0002
+  weight_decay: 0.00001
+  optimizer: adamw
+  betas: [0.9, 0.999]
+  scheduler: cosine
+  warmup_epochs: 1
+  min_lr_factor: 0.01
+  grad_clip: 1.0
+  amp: true
+  num_workers: 2
+  pin_memory: true
+  eval_every: 1
+  save_every: 1
+  early_stop_patience: 0
+  selection_metric: psnr
+  eval_lpips: true
+
+inference:
+  scale: 2
+  batch_size: 1
+  bit_depth: 8
+  out_ext: .png
+  tile_size: 0
+  tile_overlap: 32
+
+paths:
+  output_dir: runs
+  results_csv: results/experiments.csv

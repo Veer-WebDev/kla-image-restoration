@@ -1,8 +1,53 @@
 # KLA Semiconductor Image Restoration
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Veer-WebDev/kla-image-restoration/blob/kla-restoration-submission/notebooks/colab_train.ipynb)
+
 A deterministic, submission-oriented baseline for the **KLA SEMICON India Hackathon 2026** restoration task.
 
-> **Status on 2026-08-16:** the repository contains a tested residual U-Net baseline and one measured synthetic-data Colab run. The official paired KLA training images are not present in this workspace. Therefore, no result in this repository is represented as an official benchmark score and no final competition checkpoint is claimed.
+> **Status on 2026-08-17:** the repository contains a recovered and regression-tested residual U-Net baseline, a first-party source-disjoint synthetic corpus generator, and historical synthetic Colab evidence. Official paired KLA images are not present. Therefore, no repository result is represented as an official benchmark score or hidden-test performance.
+
+## Evaluator quick start (`.npy` contract)
+
+The organizer's final check runs a single command with **positional** arguments:
+
+```bash
+python run.py <input-dir> <output-dir>
+```
+
+`run.py`:
+
+- reads every `.npy` file from `<input-dir>` (recursively);
+- creates `<output-dir>` if it does not exist;
+- writes one restored `.npy` per input with the **same filename**;
+- outputs grayscale arrays of shape `(H, W)`, dtype `float32`, values in `[0, 1]` with no NaN/Inf;
+- produces the target resolution (input size x the scale stored in the checkpoint, default 2);
+- loads bundled weights from `models/best.pth` with **no internet, no API keys, no downloads, no user interaction**;
+- uses the NVIDIA GPU automatically when available, else CPU.
+
+Setup on the evaluation machine:
+
+```bash
+pip install torch --index-url https://download.pytorch.org/whl/cu121  # CUDA-matched wheel
+pip install -r requirements.txt
+python run.py /path/to/test/NoisyLR /path/to/restored
+```
+
+Submission folder layout:
+
+```text
+team_name/
+├── run.py
+├── requirements.txt
+├── README.md
+└── models/
+    └── best.pth
+```
+
+> **Weights note:** `models/best.pth` is a small residual-U-Net checkpoint whose
+> current metrics are essentially at bicubic parity (trained one epoch on
+> synthetic data). Replace it with a fully trained checkpoint via
+> `train.py`/`configs/submission_final.yaml` before final submission; `run.py`
+> and the I/O contract do not change.
 
 ## Method
 
@@ -54,6 +99,20 @@ Pass the official paired directories directly. Files are found recursively and p
 
 GT is dtype-normalized and clipped to `[0, 1]`. NoisyLR has the same dtype-normalization but is deliberately left unclipped. Images may be grayscale or RGB. Training/validation/test splitting happens by source stem before synthetic views are generated.
 
+## First-party synthetic corpus
+
+When official paired training data is unavailable, create only the disclosed first-party corpus below. The clean-source generator contains no third-party images. The materializer source-splits by clean-image SHA-256 before it produces any crop or degraded view, applies only Gaussian, speckle and downsampling, cycles all six operation orders and retains unclipped NoisyLR arrays as `float32 .npy`.
+
+```bash
+python scripts/generate_clean_sem_sources.py \
+  --out data/restoration_sources --count 96 --size 768 --seed 20260817
+python scripts/materialize_restoration_data.py \
+  --source-dir data/restoration_sources --out data/kla_restoration \
+  --seed 20260817 --views-per-source 6 --crop-size 512 --scale 2
+```
+
+Read `docs/DATA_CARD.md` before interpreting any metric. This corpus validates the public pipeline only. It is not official KLA data.
+
 ## Train
 
 First inspect the pairing report and a small overfit run. Then run the fixed baseline recipe:
@@ -69,6 +128,24 @@ python train.py \
 Training stores the resolved configuration, source-level split, validation manifest, CSV history, last checkpoint and best-validation checkpoint under `runs/<experiment_id>/`. Every completed run appends an actual result row to `results/experiments.csv`.
 
 Do not tune against the hidden test data. Run ablations one variable at a time and keep only measured results.
+
+### Reproduce the submission checkpoint on Colab (one-shot)
+
+`notebooks/colab_train.ipynb` is fully automated. It clones this repository (no manual upload), builds a **combined corpus** of the committed real DRAM/FinFET SEM structures (`data/sem_sources/`, curated from the SEMICON India *Drift-Sense* dataset) plus a larger first-party synthetic source set, trains `configs/submission_robust.yaml`, freezes the validation-best weights into `models/best.pth` (the exact file `run.py` loads), evaluates once on held-out sources, runs a robustness check on artifact-laden inputs, exercises the `run.py` `.npy` contract, and downloads the trained artifacts.
+
+1. Open the notebook in Colab: <https://colab.research.google.com/github/Veer-WebDev/kla-image-restoration/blob/kla-restoration-submission/notebooks/colab_train.ipynb> (or click the badge at the top).
+2. `Runtime > Change runtime type > T4 GPU`.
+3. `Runtime > Run all`. No prompts, no cell edits. (Private repo: add a `GITHUB_TOKEN` Colab Secret with `repo` scope.)
+4. The final cell downloads `kla_restoration_robust_artifacts.zip`; drop its `models/best.pth` into this repo at the same path to update the submission.
+
+### Robustness to real SEM acquisition artifacts
+
+The KLA-faithful forward model (`src/kla_restore/degradation.py`) implements only the three disclosed degradations (additive Gaussian noise, multiplicative speckle, downsampling). On top of that, `src/kla_restore/extended_degradation.py` adds an **opt-in, training-only** augmentation covering the broader SEM artifact family from the *Drift-Sense* methodology:
+
+- beam-spot Gaussian PSF with astigmatism, Poisson shot noise (dose-dependent), detector readout noise,
+- vignetting, gamma miscalibration, barrel/pincushion distortion, charging streaks, and raster drift/jitter.
+
+Each mechanism is independently toggled and seeded, defaults to **off** (so the strict submission path is untouched), and never clips (NoisyLR may exceed `[0, 1]`). `configs/submission_robust.yaml` enables them for training while validation stays on the clean KLA-faithful NoisyLR, so the selection metric remains comparable. `run.py` never imports this module or scipy.
 
 ## Evaluate
 
@@ -94,7 +171,7 @@ python inference.py \
   --scale 2
 ```
 
-The two directory arguments are mandatory. Files retain their input stems and are saved as PNG by default. Target size is resolved in this strict order:
+The two directory arguments are mandatory. By default, every output preserves its input-relative filename and extension, and pre-existing outputs fail before model execution unless `--overwrite` is explicit. Target size is resolved in this strict order:
 
 1. `--target-size H W`
 2. `--size-map file.csv|json`
@@ -130,4 +207,4 @@ Any Kaggle or other external dataset must be entered in that document before use
 - Gaussian/speckle levels, downsample factors and kernels are initial priors until calibrated from official pairs. They are isolated in YAML.
 - The `--scale 2` default is an explicit assumption, not an assertion about the hidden test set.
 - Dense structures destroyed by downsampling cannot be deterministically recovered. Error maps must be reported rather than presenting hallucinated detail as fact.
-- The provided model weight must be regenerated from official data before it is a credible final submission model.
+- A final checkpoint trained only on synthetic sources remains evidence of a reproducible pipeline, not a credible claim of official KLA hidden-test performance. Retrain or validate only on data that the organizers permit before making a performance claim.

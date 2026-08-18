@@ -16,6 +16,10 @@ env/
 # synthetic outputs are reproducible from configs + seeds.
 data/
 !data/README.md
+# Exception: the curated real SEM structures (DRAM + FinFET) are committed so the
+# one-shot Colab notebook can build the combined corpus without a manual upload.
+!data/sem_sources/
+!data/sem_sources/**
 
 # Run artifacts. Checkpoints are large; the final deliverable checkpoint is
 # added explicitly with `git add -f`.
@@ -49,8 +53,13 @@ Thumbs.db
 .smoke-work/
 *.log
 !docs/*.log
+docs/submission/*.aux
+docs/submission/*.out
+docs/submission/*.toc
 runs/_smoke_restored/
 runs/_smoke_restored_report.json
 runs/_gate*
 # Throwaway probes kept at the repo root while diagnosing platform behaviour.
 /_*.py
+"data/kla_big/"  
+"data/sources_big/"  
