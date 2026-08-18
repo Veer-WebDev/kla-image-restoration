@@ -318,7 +318,10 @@ def train_one_epoch(
             optimizer.zero_grad(set_to_none=True)
             with torch.amp.autocast(device_type=device.type, dtype=amp_dtype, enabled=amp_enabled):
                 pred = model(noisy, target_size=tuple(gt.shape[-2:]), clamp=False)
-                loss, terms = loss_fn(pred.float(), gt)
+            # Compute the loss OUTSIDE autocast in fp32. The SSIM term convolves
+            # squared activations; in fp16 the variance estimate can cancel to a
+            # negative value and destabilise the loss, so it must stay fp32.
+            loss, terms = loss_fn(pred.float(), gt.float())
 
             if not torch.isfinite(loss):
                 LOGGER.warning("non-finite loss at step %d; batch skipped", state.global_step)

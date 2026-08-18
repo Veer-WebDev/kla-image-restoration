@@ -220,15 +220,22 @@ def ssim_torch(
     mu_p = F.conv2d(pred, window, padding=pad, groups=channels)
     mu_t = F.conv2d(target, window, padding=pad, groups=channels)
     mu_p2, mu_t2, mu_pt = mu_p**2, mu_t**2, mu_p * mu_t
-    sigma_p2 = F.conv2d(pred * pred, window, padding=pad, groups=channels) - mu_p2
-    sigma_t2 = F.conv2d(target * target, window, padding=pad, groups=channels) - mu_t2
+    # Variances are non-negative by definition. Finite-precision catastrophic
+    # cancellation in E[x^2] - E[x]^2 can make these slightly negative, which under
+    # fp16 (AMP) previously drove the denominator through zero and blew SSIM up to
+    # huge magnitudes (loss -> large negative, training divergence). Clamp them to
+    # zero so the denominator stays strictly positive without a sign-flipping guard.
+    sigma_p2 = (F.conv2d(pred * pred, window, padding=pad, groups=channels) - mu_p2).clamp_min(0.0)
+    sigma_t2 = (F.conv2d(target * target, window, padding=pad, groups=channels) - mu_t2).clamp_min(0.0)
     sigma_pt = F.conv2d(pred * target, window, padding=pad, groups=channels) - mu_pt
 
     c1 = (0.01 * data_range) ** 2
     c2 = (0.03 * data_range) ** 2
     numerator = (2 * mu_pt + c1) * (2 * sigma_pt + c2)
+    # With sigma_p2, sigma_t2 >= 0 and c1, c2 > 0 the denominator is strictly
+    # positive, so no sign-flipping clamp is needed.
     denominator = (mu_p2 + mu_t2 + c1) * (sigma_p2 + sigma_t2 + c2)
-    return (numerator / denominator.clamp_min(1e-12)).mean()
+    return (numerator / denominator).mean()
 
 
 @dataclass

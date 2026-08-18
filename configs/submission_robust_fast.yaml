@@ -1,0 +1,107 @@
+# Fast robustness submission config.
+#
+# Same corpus, model and extended SEM-artifact augmentation as
+# configs/submission_robust.yaml, but tuned to converge in far fewer epochs
+# and less wall-clock time on a Colab T4:
+#
+#   * 24 epochs (was 60), one-cycle-style cosine with a short 1-epoch warmup;
+#   * patch_size 192 (was 256): ~1.8x less compute per sample, more samples/sec;
+#   * higher peak LR (5e-4) so the shorter schedule still reaches a good minimum;
+#   * validation stays on the clean KLA-faithful NoisyLR for comparable selection.
+#
+# This config depends on the AMP/SSIM stability fix (loss now computed in fp32
+# outside autocast, SSIM variances clamped non-negative). Without that fix a
+# shorter schedule cannot converge because the loss diverges.
+
+experiment_id: kla_restoration_robust_fast_seed20260817
+seed: 20260817
+device: auto
+strict_determinism: false
+
+data:
+  gt_dir: data/kla_sem/train/GT
+  noisy_dir: data/kla_sem/train/NoisyLR
+  source_manifest: data/kla_sem/train_manifest.csv
+  split_ratios: [0.85, 0.15, 0.0]
+  split_seed: 20260817
+  channels: 1
+  autodetect_channels: true
+  patch_size: 192
+  samples_per_image: 4
+  synthetic_prob: 0.0
+  augment: true
+  augment_flips: true
+  augment_rot90: true
+  cache_images: true
+  max_eval_size: 512
+  train_mode: official
+  eval_mode: official
+
+model:
+  name: residual_unet
+  base_channels: 48
+  depth: 4
+  upsample_mode: bicubic
+  clamp_output: false
+  degradation_aware: false
+  condition_dim: 0
+
+loss:
+  kind: charbonnier_ssim
+  charbonnier_epsilon: 0.001
+  ssim_weight: 0.2
+  l1_weight: 0.0
+
+extended_degradation:
+  enabled: true
+  beam_blur_prob: 0.5
+  beam_sigma: [0.4, 1.2]
+  astigmatism_ratio: [1.0, 2.4]
+  shot_noise_prob: 0.6
+  dose: [150.0, 4000.0]
+  detector_noise_prob: 0.5
+  detector_sigma: [0.005, 0.03]
+  vignette_prob: 0.3
+  vignette_strength: [0.1, 0.4]
+  gamma_prob: 0.3
+  gamma: [0.7, 1.8]
+  barrel_prob: 0.25
+  barrel_k: [-0.12, 0.12]
+  charging_prob: 0.25
+  charging_rate: [0.02, 0.10]
+  charging_gain: [0.15, 0.5]
+  drift_jitter_prob: 0.4
+  shear_px: [0.0, 3.0]
+  jitter_px: [0.0, 1.0]
+
+train:
+  epochs: 24
+  batch_size: 16
+  lr: 0.0005
+  weight_decay: 0.00001
+  optimizer: adamw
+  betas: [0.9, 0.999]
+  scheduler: cosine
+  warmup_epochs: 1
+  min_lr_factor: 0.02
+  grad_clip: 1.0
+  amp: true
+  num_workers: 2
+  pin_memory: true
+  eval_every: 1
+  save_every: 1
+  early_stop_patience: 6
+  selection_metric: psnr
+  eval_lpips: false
+
+inference:
+  scale: 2
+  batch_size: 1
+  bit_depth: 8
+  out_ext: .png
+  tile_size: 0
+  tile_overlap: 32
+
+paths:
+  output_dir: runs
+  results_csv: results/experiments.csv
