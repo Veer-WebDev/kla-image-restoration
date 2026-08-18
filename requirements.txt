@@ -19,5 +19,9 @@ lpips==0.1.4
 pandas==2.2.3
 matplotlib==3.9.2
 
+# Training-only: extended SEM acquisition-artifact augmentation
+# (src/kla_restore/extended_degradation.py). run.py does NOT import scipy.
+scipy>=1.10
+
 # Development and reproducibility verification only.
 pytest==8.3.3

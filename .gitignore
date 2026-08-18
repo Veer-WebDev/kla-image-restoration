@@ -16,6 +16,10 @@ env/
 # synthetic outputs are reproducible from configs + seeds.
 data/
 !data/README.md
+# Exception: the curated real SEM structures (DRAM + FinFET) are committed so the
+# one-shot Colab notebook can build the combined corpus without a manual upload.
+!data/sem_sources/
+!data/sem_sources/**
 
 # Run artifacts. Checkpoints are large; the final deliverable checkpoint is
 # added explicitly with `git add -f`.

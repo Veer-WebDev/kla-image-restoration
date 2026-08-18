@@ -43,6 +43,7 @@ from .dataset import (
     split_keys,
 )
 from .degradation import DegradationConfig, describe_config
+from .extended_degradation import ExtendedDegradationConfig, describe_extended
 from .metrics import LossConfig, aggregate, build_loss, compute_metrics, get_lpips
 from .model import ModelConfig, build_model, model_summary
 from .utils import (
@@ -217,6 +218,7 @@ def load_config(path: str | Path | None, overrides: list[str] | None = None) -> 
         },
         "paths": {"output_dir": "runs", "results_csv": "results/experiments.csv"},
         "degradation": {},
+        "extended_degradation": {},
     }
     if path:
         file_config = load_yaml(path)
@@ -454,10 +456,13 @@ def split_keys_by_source_manifest(
 
 
 def prepare_data(
-    config: dict[str, Any], degradation: DegradationConfig
+    config: dict[str, Any],
+    degradation: DegradationConfig,
+    extended: ExtendedDegradationConfig | None = None,
 ) -> tuple[RestorationDataset, RestorationDataset, dict[str, Any]]:
     """Discover, split and wrap the data. Fails loudly on an empty or unpaired dataset."""
     data_cfg = config["data"]
+    extended = extended or ExtendedDegradationConfig()
     gt_dir = Path(data_cfg["gt_dir"])
     if not gt_dir.exists():
         raise FileNotFoundError(
@@ -526,6 +531,7 @@ def prepare_data(
         noisy_map,
         mode=train_mode,  # type: ignore[arg-type]
         degradation=degradation,
+        extended=extended,
         config=DatasetConfig(
             patch_size=int(data_cfg["patch_size"]),
             samples_per_image=int(data_cfg["samples_per_image"]),
@@ -592,7 +598,10 @@ def train(config: dict[str, Any], resume: str | Path | None = None) -> dict[str,
     degradation = DegradationConfig.from_dict(config.get("degradation") or {})
     LOGGER.info("degradation | %s", describe_config(degradation))
 
-    train_ds, val_ds, split_info = prepare_data(config, degradation)
+    extended = ExtendedDegradationConfig.from_dict(config.get("extended_degradation") or {})
+    LOGGER.info("degradation | %s", describe_extended(extended))
+
+    train_ds, val_ds, split_info = prepare_data(config, degradation, extended)
     train_cfg = config["train"]
     num_workers = int(train_cfg["num_workers"])
     if device.type == "cpu" and num_workers > 0:
